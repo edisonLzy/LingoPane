@@ -1,0 +1,2139 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>macOS AI 翻译与语法理解工具 - 交互原型 (Apple HIG)</title>
+  <!-- Tailwind CSS via allowlisted CDN -->
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <style>
+    /* Apple San Francisco Typography and Smooth Rendering */
+    :root {
+      --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", Arial, sans-serif;
+      --font-mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+      
+      /* macOS Sonoma Light Tokens */
+      --mac-bg: #F5F5F7;
+      --panel-bg: rgba(255, 255, 255, 0.78);
+      --panel-border: rgba(0, 0, 0, 0.12);
+      --panel-specular: inset 0 1px 0 rgba(255, 255, 255, 0.8);
+      --panel-shadow: 0 24px 64px -12px rgba(0, 0, 0, 0.28), 0 0 0 0.5px rgba(0, 0, 0, 0.08);
+      --mac-card-bg: rgba(0, 0, 0, 0.04);
+      --mac-card-border: rgba(0, 0, 0, 0.06);
+      --mac-text-primary: #1D1D1F;
+      --mac-text-secondary: #86868B;
+      --mac-text-tertiary: #A1A1A6;
+      --mac-accent: #007AFF;
+      --mac-accent-hover: #0062CC;
+      --mac-hover-bg: rgba(0, 0, 0, 0.06);
+      --mac-active-bg: rgba(0, 0, 0, 0.12);
+      --mac-separator: rgba(0, 0, 0, 0.08);
+      --mac-menubar-bg: rgba(255, 255, 255, 0.65);
+      
+      /* Grammar colors */
+      --color-subject: #007AFF;       /* Blue */
+      --color-predicate: #FF9500;     /* Orange */
+      --color-object: #34C759;        /* Green */
+      --color-complement: #AF52DE;    /* Purple */
+      --color-adverbial: #8E8E93;     /* Gray */
+      --color-clause-rel: rgba(0, 122, 255, 0.12);
+      --color-clause-rel-border: rgba(0, 122, 255, 0.45);
+      --color-clause-cond: rgba(255, 149, 0, 0.12);
+      --color-clause-cond-border: rgba(255, 149, 0, 0.45);
+      --color-clause-conc: rgba(255, 59, 48, 0.12);
+      --color-clause-conc-border: rgba(255, 59, 48, 0.45);
+    }
+
+    .dark {
+      /* macOS Sonoma Dark Tokens */
+      --mac-bg: #121214;
+      --panel-bg: rgba(36, 36, 40, 0.78);
+      --panel-border: rgba(255, 255, 255, 0.15);
+      --panel-specular: inset 0 1px 0 rgba(255, 255, 255, 0.15);
+      --panel-shadow: 0 32px 80px -12px rgba(0, 0, 0, 0.65), 0 0 0 0.5px rgba(255, 255, 255, 0.12);
+      --mac-card-bg: rgba(255, 255, 255, 0.06);
+      --mac-card-border: rgba(255, 255, 255, 0.08);
+      --mac-text-primary: #F5F5F7;
+      --mac-text-secondary: #98989D;
+      --mac-text-tertiary: #636366;
+      --mac-accent: #0A84FF;
+      --mac-accent-hover: #409CFF;
+      --mac-hover-bg: rgba(255, 255, 255, 0.09);
+      --mac-active-bg: rgba(255, 255, 255, 0.16);
+      --mac-separator: rgba(255, 255, 255, 0.1);
+      --mac-menubar-bg: rgba(30, 30, 34, 0.75);
+
+      /* Grammar colors dark adjust */
+      --color-clause-rel: rgba(10, 132, 255, 0.18);
+      --color-clause-rel-border: rgba(10, 132, 255, 0.55);
+      --color-clause-cond: rgba(255, 159, 10, 0.18);
+      --color-clause-cond-border: rgba(255, 159, 10, 0.55);
+      --color-clause-conc: rgba(255, 69, 58, 0.18);
+      --color-clause-conc-border: rgba(255, 69, 58, 0.55);
+    }
+
+    body {
+      font-family: var(--font-system);
+      background-color: var(--mac-bg);
+      color: var(--mac-text-primary);
+      -webkit-font-smoothing: antialiased;
+      -moz-osx-font-smoothing: grayscale;
+      user-select: none;
+    }
+
+    /* macOS Window Materials */
+    .mac-vibrancy {
+      background: var(--panel-bg);
+      backdrop-filter: blur(40px) saturate(190%);
+      -webkit-backdrop-filter: blur(40px) saturate(190%);
+      border: 1px solid var(--panel-border);
+      box-shadow: var(--panel-shadow), var(--panel-specular);
+    }
+
+    .mac-subtle-card {
+      background: var(--mac-card-bg);
+      border: 1px solid var(--mac-card-border);
+    }
+
+    /* macOS Scrollbar styling */
+    ::-webkit-scrollbar {
+      width: 8px;
+      height: 8px;
+    }
+    ::-webkit-scrollbar-track {
+      background: transparent;
+    }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(120, 120, 128, 0.28);
+      border-radius: 999px;
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+    ::-webkit-scrollbar-thumb:hover {
+      background: rgba(120, 120, 128, 0.45);
+      border: 2px solid transparent;
+      background-clip: content-box;
+    }
+
+    /* macOS Keyboard Focus Ring */
+    button:focus-visible, a:focus-visible, input:focus-visible, textarea:focus-visible {
+      outline: 2px solid var(--mac-accent);
+      outline-offset: 1px;
+    }
+
+    /* Grammar Chunk Highlights */
+    .grammar-chunk {
+      display: inline-block;
+      position: relative;
+      cursor: pointer;
+      border-radius: 3px;
+      padding: 0 2px;
+      margin: 0 1px;
+      transition: all 0.15s ease;
+    }
+    .grammar-chunk:hover {
+      background-color: rgba(120, 120, 128, 0.15);
+    }
+    .chunk-subject {
+      border-bottom: 2.5px solid var(--color-subject);
+    }
+    .chunk-predicate {
+      border-bottom: 2.5px solid var(--color-predicate);
+    }
+    .chunk-object {
+      border-bottom: 2.5px solid var(--color-object);
+    }
+    .chunk-complement {
+      border-bottom: 2.5px solid var(--color-complement);
+    }
+    .chunk-adverbial {
+      border-bottom: 2px dashed var(--color-adverbial);
+    }
+    
+    /* Clause Boxes */
+    .clause-box {
+      display: inline;
+      padding: 2px 5px;
+      border-radius: 5px;
+      margin: 0 2px;
+      transition: all 0.2s ease;
+      cursor: pointer;
+    }
+    .clause-relative {
+      background: var(--color-clause-rel);
+      border: 1px solid var(--color-clause-rel-border);
+    }
+    .clause-conditional {
+      background: var(--color-clause-cond);
+      border: 1px solid var(--color-clause-cond-border);
+    }
+    .clause-concession {
+      background: var(--color-clause-conc);
+      border: 1px solid var(--color-clause-conc-border);
+    }
+    .clause-box:hover {
+      filter: brightness(1.08);
+      box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+    }
+
+    /* Keycap badge */
+    .mac-key {
+      font-family: var(--font-system);
+      font-size: 11px;
+      line-height: 1;
+      padding: 2.5px 5px;
+      border-radius: 4px;
+      background: rgba(120, 120, 128, 0.14);
+      border: 1px solid rgba(120, 120, 128, 0.22);
+      box-shadow: 0 1px 1px rgba(0,0,0,0.06);
+      font-weight: 500;
+    }
+
+    /* Toggle Switch */
+    .mac-toggle {
+      width: 36px;
+      height: 20px;
+      background-color: rgba(120, 120, 128, 0.32);
+      border-radius: 9999px;
+      position: relative;
+      cursor: pointer;
+      transition: background-color 0.2s ease;
+    }
+    .mac-toggle.active {
+      background-color: #34C759;
+    }
+    .mac-toggle-thumb {
+      width: 16px;
+      height: 16px;
+      background-color: #ffffff;
+      border-radius: 9999px;
+      position: absolute;
+      top: 2px;
+      left: 2px;
+      box-shadow: 0 2px 4px rgba(0, 0, 0, 0.25);
+      transition: transform 0.2s cubic-bezier(0.2, 0.8, 0.2, 1);
+    }
+    .mac-toggle.active .mac-toggle-thumb {
+      transform: translateX(16px);
+    }
+
+    /* Wave pulse for TTS */
+    @keyframes wave-pulse {
+      0%, 100% { transform: scaleY(0.4); }
+      50% { transform: scaleY(1); }
+    }
+    .speaking .wave-bar:nth-child(1) { animation: wave-pulse 0.7s infinite ease-in-out; }
+    .speaking .wave-bar:nth-child(2) { animation: wave-pulse 0.5s infinite 0.15s ease-in-out; }
+    .speaking .wave-bar:nth-child(3) { animation: wave-pulse 0.8s infinite 0.3s ease-in-out; }
+
+    /* Glass shimmer loading */
+    @keyframes shimmer {
+      0% { transform: translateX(-100%); }
+      100% { transform: translateX(100%); }
+    }
+    .shimmer-mask {
+      position: relative;
+      overflow: hidden;
+    }
+    .shimmer-mask::after {
+      content: '';
+      position: absolute;
+      top: 0; right: 0; bottom: 0; left: 0;
+      background: linear-gradient(90deg, transparent 0%, rgba(255,255,255,0.18) 50%, transparent 100%);
+      animation: shimmer 1.6s infinite;
+    }
+  </style>
+</head>
+<body class="min-h-screen flex flex-col overflow-x-hidden selection:bg-blue-500 selection:text-white">
+
+  <!-- ========================================================================================= -->
+  <!-- TOP PROTOTYPE CONTROL BAR (Inspector, Scenarios, Dark Mode, Presentation Controls) -->
+  <!-- ========================================================================================= -->
+  <header class="sticky top-0 z-50 bg-[#2C2C2E]/95 backdrop-blur-md text-white border-b border-white/10 px-4 py-2 flex flex-wrap items-center justify-between gap-3 text-xs shadow-md">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5 font-semibold text-sm tracking-tight text-white/95">
+        <svg class="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="2" y1="12" x2="22" y2="12"></line>
+          <path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z"></path>
+        </svg>
+        <span>macOS AI 翻译交互稿 · Apple HIG</span>
+      </div>
+      <span class="text-white/30">|</span>
+      <span class="text-white/60">场景快速切换:</span>
+      <div class="flex items-center bg-black/40 p-0.5 rounded-lg border border-white/10">
+        <button onclick="switchScenario('word_arch')" id="tab-word_arch" class="scenario-btn px-2.5 py-1 rounded-md text-white font-medium bg-blue-600 transition-colors">
+          1. 英文单词
+        </button>
+        <button onclick="switchScenario('sentence_simple')" id="tab-sentence_simple" class="scenario-btn px-2.5 py-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+          2. 英文短句
+        </button>
+        <button onclick="switchScenario('sentence_complex')" id="tab-sentence_complex" class="scenario-btn px-2.5 py-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+          3. 复杂从句
+        </button>
+        <button onclick="switchScenario('chinese_expr')" id="tab-chinese_expr" class="scenario-btn px-2.5 py-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+          4. 中译英表达
+        </button>
+        <button onclick="switchScenario('empty_state')" id="tab-empty_state" class="scenario-btn px-2.5 py-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+          5. 无选中/输入
+        </button>
+        <button onclick="switchScenario('permission_alert')" id="tab-permission_alert" class="scenario-btn px-2.5 py-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+          6. 权限引导
+        </button>
+        <button onclick="switchScenario('error_retry')" id="tab-error_retry" class="scenario-btn px-2.5 py-1 rounded-md text-white/70 hover:text-white hover:bg-white/10 transition-colors">
+          7. 异常与降级
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Controls: View mode, Settings, Theme, Hotkey Pill -->
+    <div class="flex items-center gap-3">
+      <!-- Style Selector -->
+      <div class="relative">
+        <button onclick="toggleStyleMenu()" id="style-selector-btn" class="flex items-center gap-1.5 px-2.5 py-1 rounded-md bg-blue-500/20 hover:bg-blue-500/30 text-blue-300 font-medium transition-colors border border-blue-400/30" title="切换设计视觉风格版本">
+          <svg class="w-3.5 h-3.5 text-blue-400" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+          </svg>
+          <span id="current-style-label">风格 1: 原生 Sonoma</span>
+          <svg class="w-3 h-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+            <polyline points="6 9 12 15 18 9"></polyline>
+          </svg>
+        </button>
+
+        <!-- Style Dropdown Menu -->
+        <div id="style-dropdown" class="hidden absolute right-0 top-7 w-72 py-1.5 rounded-xl mac-vibrancy text-[11px] shadow-2xl z-50 border border-white/10 animate-fadeIn">
+          <div class="px-3 py-1 font-semibold text-gray-400 uppercase tracking-wider text-[10px]">选择设计与材质风格版本</div>
+          <a href="index.html" class="px-3 py-2 hover:bg-blue-600 hover:text-white flex items-center justify-between cursor-pointer rounded-lg mx-1 transition-colors bg-blue-600/15 text-blue-300 font-medium">
+            <div>
+              <div class="font-semibold">风格 1: 原生 macOS Sonoma</div>
+              <div class="text-[10px] opacity-70">经典 HIG 规范毛玻璃与标准系统控件</div>
+            </div>
+            <span>✓</span>
+          </a>
+          <a href="style_liquid_glass.html" class="px-3 py-2 hover:bg-blue-600 hover:text-white flex items-center justify-between cursor-pointer rounded-lg mx-1 transition-colors text-white/90">
+            <div>
+              <div class="font-semibold text-blue-400">风格 2: 官方 Liquid Glass 规范</div>
+              <div class="text-[10px] opacity-70">同心圆角、流体形态变形与内容拓展层</div>
+            </div>
+            <span class="text-xs text-blue-400 font-bold">推荐 ↗</span>
+          </a>
+          <a href="style_spatial_glass.html" class="px-3 py-2 hover:bg-blue-600 hover:text-white flex items-center justify-between cursor-pointer rounded-lg mx-1 transition-colors text-white/90">
+            <div>
+              <div class="font-semibold text-cyan-300">风格 3: Vision 空间流光磨砂</div>
+              <div class="text-[10px] opacity-70">微细喷砂噪点、彩虹高光折射与发光从句</div>
+            </div>
+            <span class="text-xs text-cyan-400">打开 ↗</span>
+          </a>
+          <a href="style_neumorphic_tactile.html" class="px-3 py-2 hover:bg-blue-600 hover:text-white flex items-center justify-between cursor-pointer rounded-lg mx-1 transition-colors text-white/90">
+            <div>
+              <div class="font-semibold text-amber-300">风格 4: 柔光拟物微浮雕</div>
+              <div class="text-[10px] opacity-70">细腻喷砂、实体机械按压与博朗触感</div>
+            </div>
+            <span class="text-xs text-amber-400">打开 ↗</span>
+          </a>
+        </div>
+      </div>
+      <!-- Hotkey badge -->
+      <div class="hidden md:flex items-center gap-1.5 px-2 py-1 rounded bg-white/5 border border-white/10 text-white/70 text-[11px]">
+        <span>呼出浮窗</span>
+        <span class="mac-key bg-white/15 text-white border-white/20">⌥ Space</span>
+      </div>
+
+      <!-- Settings button -->
+      <button onclick="toggleSettingsModal(true)" class="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/90 font-medium transition-colors">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="3"></circle>
+          <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+        </svg>
+        <span>偏好设置 (⌘,)</span>
+      </button>
+
+      <!-- View Context Switcher (Desktop Simulation vs Clean Preview) -->
+      <button onclick="toggleDesktopContext()" id="btn-toggle-context" class="flex items-center gap-1 px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white/90 font-medium transition-colors">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+          <line x1="8" y1="21" x2="16" y2="21"></line>
+          <line x1="12" y1="17" x2="12" y2="21"></line>
+        </svg>
+        <span id="context-label">桌面工作流视图</span>
+      </button>
+
+      <!-- Dark / Light Mode Toggle -->
+      <button onclick="toggleTheme()" class="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white transition-colors" title="切换深色/浅色外观">
+        <svg id="theme-icon-moon" class="w-4 h-4 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"></path>
+        </svg>
+        <svg id="theme-icon-sun" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="5"></circle>
+          <line x1="12" y1="1" x2="12" y2="3"></line>
+          <line x1="12" y1="21" x2="12" y2="23"></line>
+          <line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+          <line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+          <line x1="1" y1="12" x2="3" y2="12"></line>
+          <line x1="21" y1="12" x2="23" y2="12"></line>
+          <line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+          <line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+        </svg>
+      </button>
+
+      <!-- Design Spec Drawer Toggle -->
+      <button onclick="toggleSpecDrawer()" class="p-1.5 rounded-md bg-white/10 hover:bg-white/20 text-white transition-colors" title="设计规范与 HIG 规则注解">
+        <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"></path>
+          <polyline points="14 2 14 8 20 8"></polyline>
+          <line x1="16" y1="13" x2="8" y2="13"></line>
+          <line x1="16" y1="17" x2="8" y2="17"></line>
+          <polyline points="10 9 9 9 8 9"></polyline>
+        </svg>
+      </button>
+    </div>
+  </header>
+
+  <!-- ========================================================================================= -->
+  <!-- MAC OS DESKTOP CONTAINER (Simulating macOS Sonoma Desktop or Focus Canvas) -->
+  <!-- ========================================================================================= -->
+  <main id="desktop-wrapper" class="relative flex-1 flex flex-col justify-start items-center p-0 md:p-6 transition-all duration-300 overflow-hidden" 
+        style="background: radial-gradient(circle at 50% 20%, #2A3B5C 0%, #151C2C 60%, #0A0D15 100%);">
+    
+    <!-- Realistic macOS Menu Bar (Top) -->
+    <div id="macos-menubar" class="w-full max-w-6xl mx-auto h-7 px-4 rounded-t-xl flex items-center justify-between text-[13px] font-medium transition-colors"
+         style="background: var(--mac-menubar-bg); backdrop-filter: blur(24px); border-bottom: 1px solid var(--panel-border); color: var(--mac-text-primary);">
+      <!-- Left side: Apple Logo & App menus -->
+      <div class="flex items-center gap-4">
+        <!-- Apple Logo -->
+        <svg class="w-3.5 h-3.5 fill-current opacity-90 cursor-pointer" viewBox="0 0 170 170">
+          <path d="M150.37 130.25c-2.45 5.66-5.35 10.87-8.71 15.66-4.58 6.53-8.33 11.05-11.22 13.56-4.48 4.12-9.28 6.23-14.42 6.35-3.69 0-8.14-1.05-13.32-3.18-5.19-2.12-9.97-3.17-14.34-3.17-4.58 0-9.49 1.05-14.75 3.17-5.26 2.13-9.5 3.24-12.74 3.35-4.35.13-9.16-1.9-14.42-6.08-3.69-3.04-7.67-7.81-11.96-14.34-6.3-9.59-11.19-20.73-14.68-33.43-3.49-12.7-5.23-24.87-5.23-36.5 0-14.28 3.59-26.25 10.77-35.91 7.18-9.66 16.33-14.59 27.46-14.78 4.58 0 9.87 1.25 15.86 3.75 5.99 2.5 10.05 3.77 12.18 3.79 1.63 0 5.83-1.32 12.61-3.95 6.78-2.63 12.55-3.81 17.3-3.53 13.52.88 23.95 5.58 31.28 14.1-12.12 7.37-18.06 17.43-17.82 30.17.24 10.01 4.12 18.37 11.64 25.07 7.52 6.7 16.39 10.45 26.61 11.25-2.07 6.1-4.42 12.22-7.07 18.36zM119.22 31.84c0-7.39 2.65-14.47 7.95-21.23 5.3-6.76 11.98-10.61 20.03-11.55.13 1.08.19 2.05.19 2.91 0 7.39-2.78 14.54-8.33 21.46-5.55 6.92-12.35 10.78-20.4 11.58-.12-1.08-.18-2.05-.18-2.91z"/>
+        </svg>
+        <span class="font-semibold text-xs tracking-tight">Translator</span>
+        <span class="text-xs opacity-75 hover:opacity-100 cursor-pointer">文件</span>
+        <span class="text-xs opacity-75 hover:opacity-100 cursor-pointer">编辑</span>
+        <span class="text-xs opacity-75 hover:opacity-100 cursor-pointer">视图</span>
+        <span class="text-xs opacity-75 hover:opacity-100 cursor-pointer">窗口</span>
+        <span class="text-xs opacity-75 hover:opacity-100 cursor-pointer">帮助</span>
+      </div>
+
+      <!-- Right side: Status Bar extras -->
+      <div class="flex items-center gap-3 text-xs opacity-90">
+        <!-- Translator Menu Bar Extra Icon (Interactive) -->
+        <div class="relative">
+          <button onclick="toggleMenuBarMenu()" id="menubar-icon-btn" class="px-1.5 py-0.5 rounded hover:bg-black/10 dark:hover:bg-white/15 flex items-center gap-1 transition-colors" title="点击查看菜单栏选项">
+            <svg class="w-3.5 h-3.5 text-blue-500 fill-current" viewBox="0 0 24 24">
+              <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
+            </svg>
+          </button>
+
+          <!-- Menu Bar Dropdown Menu (Hidden by default) -->
+          <div id="menubar-dropdown" class="hidden absolute right-0 top-6 w-52 py-1 rounded-lg mac-vibrancy text-[12px] shadow-2xl z-50 animate-fadeIn">
+            <div onclick="togglePanel(true); toggleMenuBarMenu();" class="px-3 py-1.5 hover:bg-blue-600 hover:text-white flex items-center justify-between cursor-pointer rounded-sm mx-1">
+              <span>显示悬浮面板</span>
+              <span class="opacity-60 text-[10px]">⌥Space</span>
+            </div>
+            <div onclick="triggerTranslateFromClipboard(); toggleMenuBarMenu();" class="px-3 py-1.5 hover:bg-blue-600 hover:text-white flex items-center justify-between cursor-pointer rounded-sm mx-1">
+              <span>从剪贴板翻译</span>
+              <span class="opacity-60 text-[10px]">⌥⌘V</span>
+            </div>
+            <div class="h-[1px] my-1 bg-black/10 dark:bg-white/10"></div>
+            <div onclick="toggleSettingsModal(true); toggleMenuBarMenu();" class="px-3 py-1.5 hover:bg-blue-600 hover:text-white flex items-center justify-between cursor-pointer rounded-sm mx-1">
+              <span>偏好设置...</span>
+              <span class="opacity-60 text-[10px]">⌘,</span>
+            </div>
+            <div onclick="clearAllCache(); toggleMenuBarMenu();" class="px-3 py-1.5 hover:bg-blue-600 hover:text-white flex items-center justify-between cursor-pointer rounded-sm mx-1">
+              <span>清除本地缓存</span>
+            </div>
+            <div class="h-[1px] my-1 bg-black/10 dark:bg-white/10"></div>
+            <div class="px-3 py-1.5 text-gray-400 dark:text-gray-500 cursor-not-allowed mx-1">
+              <span>检查更新...</span>
+            </div>
+            <div class="px-3 py-1.5 hover:bg-blue-600 hover:text-white flex items-center justify-between cursor-pointer rounded-sm mx-1">
+              <span>退出 Translator</span>
+              <span class="opacity-60 text-[10px]">⌘Q</span>
+            </div>
+          </div>
+        </div>
+
+        <span>Wi-Fi</span>
+        <span>100%</span>
+        <span id="mac-clock">21:48</span>
+      </div>
+    </div>
+
+    <!-- Desktop Workspace Canvas / App Simulation (e.g. VS Code or Browser) -->
+    <div id="desktop-app-mockup" class="w-full max-w-6xl flex-1 rounded-b-xl border border-white/10 shadow-2xl relative flex flex-col overflow-hidden transition-all duration-300"
+         style="min-height: 640px; background: rgba(20, 24, 33, 0.85); backdrop-filter: blur(20px);">
+      
+      <!-- Simulated Host Window (e.g. VS Code or Safari) Titlebar -->
+      <div class="h-9 bg-[#1E1E24]/90 border-b border-white/10 px-3 flex items-center justify-between text-xs text-gray-400">
+        <div class="flex items-center gap-2">
+          <div class="flex items-center gap-1.5">
+            <div class="w-3 h-3 rounded-full bg-[#FF5F56] border border-[#E0443E]"></div>
+            <div class="w-3 h-3 rounded-full bg-[#FFBD2E] border border-[#DEA123]"></div>
+            <div class="w-3 h-3 rounded-full bg-[#27C93F] border border-[#1AAB29]"></div>
+          </div>
+          <span class="ml-2 font-mono text-[11px] text-gray-300">ArchitectureReview.ts — Workspace (模拟宿主应用)</span>
+        </div>
+        <div class="text-[11px] text-gray-500 flex items-center gap-2">
+          <span class="px-1.5 py-0.5 rounded bg-white/5 border border-white/10">选中文本并触发 ⌥Space 体验</span>
+        </div>
+      </div>
+
+      <!-- Simulated Code / Document Body with selectable text -->
+      <div class="flex-1 p-6 font-mono text-sm leading-relaxed overflow-y-auto relative text-gray-300">
+        <div class="text-gray-500 text-xs mb-3">// 模拟真实开发场景：用户在代码或注释中选中文本，悬浮面板在其旁边就近浮出</div>
+        <p class="mb-3">
+          <span class="text-blue-400">export interface</span> <span class="text-yellow-300">SystemConfig</span> {<br>
+          &nbsp;&nbsp;readonly version: <span class="text-green-300">string</span>;<br>
+          &nbsp;&nbsp;readonly maxConnections: <span class="text-orange-400">5000</span>;<br>
+          }
+        </p>
+        <p class="mb-4">
+          <span class="text-gray-500">/**</span><br>
+          <span class="text-gray-500">&nbsp;* Core system architectural guideline.</span><br>
+          <span class="text-gray-500">&nbsp;* Note: </span>
+          <span id="selectable-text-mock" class="bg-blue-600/40 text-blue-100 px-1 py-0.5 rounded ring-2 ring-blue-500/80 cursor-pointer" onclick="reTriggerCurrentSelection()" title="模拟用户选中文字并触发快捷键">
+            architecture
+          </span>
+          <span class="text-gray-500"> patterns should adhere to SOLID principles.</span><br>
+          <span class="text-gray-500">&nbsp;* </span><br>
+          <span class="text-gray-500">&nbsp;* 英文句子示例: </span>
+          <span onclick="switchScenario('sentence_simple')" class="text-gray-300 hover:text-white underline decoration-blue-400/60 decoration-dashed cursor-pointer">
+            The feature that we discussed yesterday has been implemented.
+          </span><br>
+          <span class="text-gray-500">&nbsp;* 复杂句子示例: </span>
+          <span onclick="switchScenario('sentence_complex')" class="text-gray-300 hover:text-white underline decoration-purple-400/60 decoration-dashed cursor-pointer">
+            Although the system was originally designed for small teams, it has gradually evolved into a platform that can support thousands of users.
+          </span><br>
+          <span class="text-gray-500">&nbsp;* 中文表达示例: </span>
+          <span onclick="switchScenario('chinese_expr')" class="text-gray-300 hover:text-white underline decoration-emerald-400/60 decoration-dashed cursor-pointer">
+            这个方案可以先作为一个兜底方案。
+          </span><br>
+          <span class="text-gray-500">*/</span>
+        </p>
+
+        <!-- Simulated Cursor Arrow Pointing to Floating Panel -->
+        <div id="simulated-cursor" class="absolute left-72 top-36 z-20 pointer-events-none flex items-center gap-1 transition-all duration-300">
+          <svg class="w-5 h-5 text-white drop-shadow-md" viewBox="0 0 24 24" fill="currentColor">
+            <path d="M3 3l7 18 3-7 7-3L3 3z"/>
+          </svg>
+          <span class="text-[10px] bg-black/75 text-white/90 px-1.5 py-0.5 rounded shadow backdrop-blur">光标选中处</span>
+        </div>
+
+        <!-- ========================================================================================= -->
+        <!-- CORE COMPONENT: THE FLOATING TRANSLATION PANEL (`NSPanel`) -->
+        <!-- Follows exact Apple HIG: 400px width, max 520px height, vibrant glass, pinned state -->
+        <!-- ========================================================================================= -->
+        <div id="floating-panel" 
+             class="absolute left-80 top-44 z-30 w-[410px] rounded-2xl mac-vibrancy transition-all duration-200 flex flex-col overflow-hidden"
+             style="max-height: 520px;"
+             tabindex="0"
+             role="dialog"
+             aria-label="翻译浮窗">
+          
+          <!-- Panel Header / Draggable & Utility bar -->
+          <div class="px-4 pt-3 pb-2 flex items-center justify-between border-b border-[var(--mac-separator)] select-none">
+            <!-- Language Indicator Pill (Auto-detection with manual toggle) -->
+            <div class="flex items-center gap-1.5">
+              <div class="relative">
+                <button onclick="toggleLanguageSelector()" id="lang-selector-btn" class="flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium mac-subtle-card hover:bg-black/5 dark:hover:bg-white/10 transition-colors" title="点击切换检测语言">
+                  <span id="panel-lang-badge" class="text-[11px] text-[var(--mac-accent)] font-semibold">English → 中文</span>
+                  <svg class="w-3 h-3 opacity-60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="6 9 12 15 18 9"></polyline>
+                  </svg>
+                </button>
+                <!-- Language Menu Dropdown -->
+                <div id="lang-menu" class="hidden absolute left-0 top-6 w-32 py-1 rounded-lg mac-vibrancy text-[11px] shadow-lg z-50">
+                  <div onclick="selectLanguage('auto')" class="px-3 py-1 hover:bg-blue-600 hover:text-white cursor-pointer">自动检测 (默认)</div>
+                  <div onclick="selectLanguage('en2zh')" class="px-3 py-1 hover:bg-blue-600 hover:text-white cursor-pointer">英语 → 中文</div>
+                  <div onclick="selectLanguage('zh2en')" class="px-3 py-1 hover:bg-blue-600 hover:text-white cursor-pointer">中文 → 英语</div>
+                </div>
+              </div>
+
+              <!-- Cache status indicator -->
+              <span id="cache-hit-badge" class="hidden text-[10px] px-1.5 py-0.2 rounded-full bg-green-500/15 text-green-600 dark:text-green-400 font-medium" title="本地 SQLite 极速缓存命中 (耗时 &lt;15ms)">
+                ⚡ 缓存命中
+              </span>
+            </div>
+
+            <!-- Window Controls: Pin & Close -->
+            <div class="flex items-center gap-1">
+              <!-- Pin Button (Keeps panel open on blur) -->
+              <button onclick="togglePinPanel()" id="btn-pin" class="p-1 rounded-md text-[var(--mac-text-secondary)] hover:text-[var(--mac-text-primary)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors" title="固定窗口 (失焦不关闭)">
+                <svg id="pin-icon" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="12" y1="17" x2="12" y2="22"></line>
+                  <path d="M5 17h14v-2l-2-2V5a1 1 0 0 0-1-1H8a1 1 0 0 0-1 1v8l-2 2v2z"></path>
+                </svg>
+              </button>
+              <!-- Close Button -->
+              <button onclick="togglePanel(false)" class="p-1 rounded-md text-[var(--mac-text-secondary)] hover:text-[var(--mac-text-primary)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors" title="关闭 (Esc)">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+          </div>
+
+          <!-- Panel Scrollable Body -->
+          <div id="panel-scroll-body" class="p-4 flex-1 overflow-y-auto space-y-3.5 text-left select-text">
+            
+            <!-- SECTION 1: SOURCE TEXT & PRONUNCIATION -->
+            <div class="space-y-1.5">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex-1">
+                  <!-- Word or Sentence Display Container -->
+                  <div id="source-text-container" class="text-[17px] font-semibold tracking-tight text-[var(--mac-text-primary)] leading-snug">
+                    architecture
+                  </div>
+                  <!-- IPA Phonetic Display (for words) -->
+                  <div id="source-ipa-container" class="text-xs font-mono text-[var(--mac-text-secondary)] mt-0.5 flex items-center gap-1.5">
+                    <span id="source-ipa-text">/ˈɑːrkɪtektʃər/</span>
+                  </div>
+                </div>
+
+                <!-- Action buttons: Audio Pronunciation & Copy Source -->
+                <div class="flex items-center gap-1 pt-0.5 shrink-0">
+                  <!-- Audio Speaker Button with realistic Wave animation -->
+                  <button onclick="playTTS()" id="tts-btn" class="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-[var(--mac-accent)] transition-colors flex items-center justify-center" title="朗读发音 (AVSpeechSynthesizer)">
+                    <div id="tts-icon-default" class="w-4 h-4 flex items-center justify-center">
+                      <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+                        <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+                      </svg>
+                    </div>
+                    <div id="tts-icon-speaking" class="hidden w-4 h-4 flex items-center justify-center gap-0.5 speaking">
+                      <span class="wave-bar w-0.5 h-3 bg-blue-500 rounded-full"></span>
+                      <span class="wave-bar w-0.5 h-3 bg-blue-500 rounded-full"></span>
+                      <span class="wave-bar w-0.5 h-3 bg-blue-500 rounded-full"></span>
+                    </div>
+                  </button>
+
+                  <!-- Copy Original Text -->
+                  <button onclick="copySourceText()" class="p-1.5 rounded-full hover:bg-black/5 dark:hover:bg-white/10 text-[var(--mac-text-secondary)] hover:text-[var(--mac-text-primary)] transition-colors" title="复制原文">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                      <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                    </svg>
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 2: TRANSLATION RESULT CARD -->
+            <div class="p-3 rounded-xl mac-subtle-card relative group transition-all">
+              <div class="flex items-start justify-between gap-2">
+                <div class="flex-1">
+                  <!-- Tone or Category Badge (Optional) -->
+                  <div id="translation-tone-badge" class="hidden inline-flex items-center gap-1 text-[10px] font-medium px-2 py-0.5 rounded-md bg-blue-500/10 text-blue-600 dark:text-blue-400 mb-1.5">
+                    <span>💡 自然表达 · 技术交流</span>
+                  </div>
+
+                  <!-- Translation Content -->
+                  <div id="translation-text-container" class="text-[15px] font-medium text-[var(--mac-text-primary)] leading-relaxed">
+                    架构；体系结构；建筑学
+                  </div>
+
+                  <!-- Part of Speech Badges (for words) -->
+                  <div id="word-pos-container" class="flex flex-wrap gap-1.5 mt-2">
+                    <span class="text-[11px] px-2 py-0.5 rounded bg-black/5 dark:bg-white/10 font-semibold text-[var(--mac-accent)]">n. 名词</span>
+                  </div>
+                </div>
+
+                <!-- Copy Translation Button -->
+                <button onclick="copyTranslationText()" class="p-1.5 rounded-md hover:bg-black/5 dark:hover:bg-white/10 text-[var(--mac-text-secondary)] hover:text-[var(--mac-text-primary)] transition-colors" title="复制译文">
+                  <svg id="copy-trans-icon" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                    <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+                  </svg>
+                </button>
+              </div>
+            </div>
+
+            <!-- SECTION 3: WORD EXTRA DETAILS (COLLAPSIBLE: Collocations & Examples) -->
+            <div id="word-details-section" class="space-y-2 text-xs">
+              <button onclick="toggleWordDetails()" class="w-full flex items-center justify-between py-1 px-1 text-[var(--mac-text-secondary)] hover:text-[var(--mac-text-primary)] font-medium transition-colors">
+                <span class="flex items-center gap-1.5">
+                  <svg id="word-details-arrow" class="w-3 h-3 transition-transform duration-200" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                    <polyline points="9 18 15 12 9 6"></polyline>
+                  </svg>
+                  <span>常见搭配与例句</span>
+                </span>
+                <span class="text-[10px] opacity-60">按需展开</span>
+              </button>
+
+              <div id="word-details-content" class="hidden space-y-2 pt-1 border-t border-[var(--mac-separator)] text-[12px]">
+                <!-- Collocations -->
+                <div class="space-y-1">
+                  <div class="text-[11px] font-semibold text-[var(--mac-text-tertiary)] uppercase tracking-wider">常见搭配</div>
+                  <div class="p-2 rounded-lg bg-black/5 dark:bg-white/5 space-y-1">
+                    <div class="flex justify-between">
+                      <span class="font-medium text-[var(--mac-text-primary)]">software architecture</span>
+                      <span class="text-[var(--mac-text-secondary)]">软件架构</span>
+                    </div>
+                    <div class="flex justify-between">
+                      <span class="font-medium text-[var(--mac-text-primary)]">system architecture</span>
+                      <span class="text-[var(--mac-text-secondary)]">系统架构</span>
+                    </div>
+                  </div>
+                </div>
+
+                <!-- Examples -->
+                <div class="space-y-1">
+                  <div class="text-[11px] font-semibold text-[var(--mac-text-tertiary)] uppercase tracking-wider">语境例句</div>
+                  <div class="p-2 rounded-lg bg-black/5 dark:bg-white/5 space-y-1">
+                    <div class="text-[var(--mac-text-primary)]">The system uses a modular architecture.</div>
+                    <div class="text-[var(--mac-text-secondary)]">系统采用了模块化的架构设计。</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 4: SENTENCE GRAMMAR EXPANSION (COLLAPSIBLE BUTTON / EXPANDED VIEW) -->
+            <div id="sentence-grammar-section" class="hidden space-y-3">
+              
+              <!-- Fast Mode Button: "查看句子结构" -->
+              <button onclick="expandSentenceGrammar()" id="btn-expand-grammar" 
+                      class="w-full py-2 px-3 rounded-xl mac-subtle-card hover:bg-black/5 dark:hover:bg-white/10 text-xs font-medium text-[var(--mac-accent)] flex items-center justify-center gap-1.5 transition-all shadow-sm">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <line x1="8" y1="6" x2="21" y2="6"></line>
+                  <line x1="8" y1="12" x2="21" y2="12"></line>
+                  <line x1="8" y1="18" x2="21" y2="18"></line>
+                  <line x1="3" y1="6" x2="3.01" y2="6"></line>
+                  <line x1="3" y1="12" x2="3.01" y2="12"></line>
+                  <line x1="3" y1="18" x2="3.01" y2="18"></line>
+                </svg>
+                <span>查看句子结构与成分解析</span>
+              </button>
+
+              <!-- Deep Analyze Container (Appears when expanded) -->
+              <div id="grammar-expanded-view" class="hidden space-y-3 pt-2 border-t border-[var(--mac-separator)] animate-fadeIn">
+                
+                <!-- 1. Sentence Skeleton (主干提取) Callout -->
+                <div class="p-2.5 rounded-xl bg-blue-500/10 border border-blue-500/20 text-xs">
+                  <div class="flex items-center gap-1.5 font-semibold text-blue-600 dark:text-blue-400 mb-1">
+                    <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                      <polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2"></polygon>
+                    </svg>
+                    <span>句子核心主干 (Skeleton)</span>
+                  </div>
+                  <div id="skeleton-text" class="text-[13px] font-medium text-[var(--mac-text-primary)] font-mono">
+                    The feature has been implemented.
+                  </div>
+                </div>
+
+                <!-- 2. Annotated Sentence Visualization (下划线 & 方框标注) -->
+                <div class="space-y-1.5">
+                  <div class="flex items-center justify-between text-[11px] text-[var(--mac-text-secondary)]">
+                    <span class="font-semibold text-[var(--mac-text-tertiary)] uppercase">结构标注 (悬停或点击成分查看说明)</span>
+                    <span class="text-[10px] text-[var(--mac-accent)]">轻触成分固定卡片</span>
+                  </div>
+                  
+                  <!-- Interactive Sentence Box with Chunks -->
+                  <div id="annotated-sentence-box" class="p-3 rounded-xl bg-black/5 dark:bg-white/5 text-[14px] leading-relaxed relative">
+                    <!-- Dynamic Chunks injected here -->
+                  </div>
+                </div>
+
+                <!-- 3. Grammar Role Legend / Color Palette indicator -->
+                <div class="flex flex-wrap gap-2 text-[10px] text-[var(--mac-text-secondary)] px-1">
+                  <span class="flex items-center gap-1"><span class="w-2.5 h-1 rounded bg-[#007AFF]"></span>主语</span>
+                  <span class="flex items-center gap-1"><span class="w-2.5 h-1 rounded bg-[#FF9500]"></span>谓语</span>
+                  <span class="flex items-center gap-1"><span class="w-2.5 h-1 rounded bg-[#34C759]"></span>宾语</span>
+                  <span class="flex items-center gap-1"><span class="w-2.5 h-1 rounded bg-[#AF52DE]"></span>补语</span>
+                  <span class="flex items-center gap-1"><span class="w-2.5 h-0.5 border-b border-dashed border-[#8E8E93]"></span>状语</span>
+                  <span class="flex items-center gap-1"><span class="w-2.5 h-2 rounded border border-blue-400 bg-blue-400/20"></span>从句</span>
+                </div>
+
+                <!-- 4. Key Grammar Points Breakdown (时态、语态、从句修饰) -->
+                <div class="space-y-1.5 pt-1">
+                  <div class="text-[11px] font-semibold text-[var(--mac-text-tertiary)] uppercase">重点语法与修饰解析</div>
+                  <div id="grammar-points-list" class="space-y-1.5 text-xs">
+                    <!-- Injected by JS -->
+                  </div>
+                </div>
+
+                <!-- Collapse Button -->
+                <button onclick="collapseSentenceGrammar()" class="w-full py-1.5 text-center text-xs text-[var(--mac-text-secondary)] hover:text-[var(--mac-text-primary)] transition-colors">
+                  收起详细解析 ▲
+                </button>
+              </div>
+            </div>
+
+            <!-- SECTION 5: CHINESE EXPRESSIONS ALTERNATIVES (for Chinese to English Mode) -->
+            <div id="chinese-expr-section" class="hidden space-y-3">
+              <div class="text-xs font-semibold text-[var(--mac-text-tertiary)] uppercase">更自然的英文表达与场景</div>
+              <div id="chinese-alternatives-list" class="space-y-2 text-xs">
+                <!-- Injected by JS -->
+              </div>
+              
+              <!-- Expression note callout -->
+              <div class="p-2.5 rounded-xl bg-amber-500/10 border border-amber-500/20 text-xs">
+                <div class="font-semibold text-amber-700 dark:text-amber-400 mb-1">💡 表达说明与用词洞察</div>
+                <div id="chinese-expr-note" class="text-[12px] text-[var(--mac-text-primary)] leading-relaxed">
+                  “兜底方案”在技术工程语境下通常翻译为 <strong>fallback</strong> 或 <strong>fallback solution</strong>；“先”在日常英文沟通中用 <strong>for now</strong> 比 literally 的 first 更自然。
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 6: FALLBACK / EMPTY INPUT STATE (When no text selected) -->
+            <div id="empty-state-section" class="hidden py-4 text-center space-y-3">
+              <div class="w-12 h-12 mx-auto rounded-full bg-blue-500/10 text-[var(--mac-accent)] flex items-center justify-center">
+                <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+                  <line x1="9" y1="9" x2="15" y2="9"></line>
+                  <line x1="9" y1="13" x2="15" y2="13"></line>
+                  <line x1="9" y1="17" x2="11" y2="17"></line>
+                </svg>
+              </div>
+              <div>
+                <div class="text-sm font-semibold text-[var(--mac-text-primary)]">没有检测到选中文本</div>
+                <div class="text-xs text-[var(--mac-text-secondary)] mt-0.5">请在任意 App 中选择文字，或在下方直接输入</div>
+              </div>
+
+              <!-- Direct input box -->
+              <div class="space-y-2 text-left">
+                <textarea id="manual-input-box" rows="2" placeholder="输入任意英文单词、长句或中文..." 
+                          class="w-full text-xs p-2.5 rounded-xl bg-black/5 dark:bg-white/5 border border-[var(--mac-separator)] focus:ring-2 focus:ring-blue-500 focus:outline-none resize-none text-[var(--mac-text-primary)] placeholder:text-gray-400"></textarea>
+                <div class="flex items-center justify-between">
+                  <span id="char-limit-counter" class="text-[10px] text-gray-400">单次最多 500 字</span>
+                  <button onclick="handleManualTranslate()" class="px-3 py-1 rounded-lg bg-[var(--mac-accent)] hover:bg-blue-600 text-white font-medium text-xs shadow transition-colors">
+                    立即翻译 ↵
+                  </button>
+                </div>
+              </div>
+            </div>
+
+            <!-- SECTION 7: ERROR & RETRY STATE -->
+            <div id="error-state-section" class="hidden p-3.5 rounded-xl bg-red-500/10 border border-red-500/20 text-xs space-y-2">
+              <div class="flex items-center gap-2 text-red-600 dark:text-red-400 font-semibold text-[13px]">
+                <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                  <circle cx="12" cy="12" r="10"></circle>
+                  <line x1="12" y1="8" x2="12" y2="12"></line>
+                  <line x1="12" y1="16" x2="12.01" y2="16"></line>
+                </svg>
+                <span id="error-title">请求暂时失败</span>
+              </div>
+              <div id="error-desc" class="text-gray-600 dark:text-gray-300 leading-relaxed">
+                网络连接超时或 LLM 服务商未响应，请检查网络或 API Key 配置。
+              </div>
+              <div class="flex items-center gap-2 pt-1">
+                <button onclick="retryLastAction()" class="px-3 py-1 rounded-lg bg-red-600 text-white font-medium text-xs hover:bg-red-700 transition-colors">
+                  重试 (Retry)
+                </button>
+                <button onclick="toggleSettingsModal(true)" class="px-3 py-1 rounded-lg bg-black/5 dark:bg-white/10 text-[var(--mac-text-primary)] font-medium text-xs hover:bg-black/10 transition-colors">
+                  检查设置
+                </button>
+              </div>
+            </div>
+
+          </div>
+
+          <!-- Bottom Footer Bar (Fast Actions & Shortcut Hint) -->
+          <div class="px-4 py-2 border-t border-[var(--mac-separator)] bg-black/[0.02] dark:bg-white/[0.02] flex items-center justify-between text-[11px] text-[var(--mac-text-secondary)] select-none">
+            <div class="flex items-center gap-2">
+              <span class="flex items-center gap-1">
+                <span class="mac-key">Esc</span> 关闭
+              </span>
+              <span class="flex items-center gap-1">
+                <span class="mac-key">⌘C</span> 复制
+              </span>
+            </div>
+            <div class="text-[10px] text-gray-400">
+              Apple HIG Utility Panel
+            </div>
+          </div>
+
+          <!-- ===================================================================================== -->
+          <!-- INTERACTIVE HOVER & PIN CARD (Grammar Tooltip Popover) -->
+          <!-- ===================================================================================== -->
+          <div id="grammar-tooltip-card" 
+               class="hidden absolute z-50 w-64 p-3 rounded-xl mac-vibrancy shadow-2xl border border-[var(--panel-border)] text-xs transition-all pointer-events-auto animate-fadeIn"
+               style="transform: translateY(-100%); margin-top: -8px;">
+            <div class="flex items-start justify-between gap-1 mb-1">
+              <div class="flex items-center gap-1.5 font-semibold text-[var(--mac-accent)]">
+                <span id="card-badge-role" class="px-1.5 py-0.2 rounded bg-blue-500/15 text-[11px]">定语从句</span>
+                <span id="card-pinned-tag" class="hidden text-[10px] bg-amber-500/20 text-amber-600 dark:text-amber-300 px-1 rounded">已固定</span>
+              </div>
+              <button onclick="unpinGrammarCard()" class="p-0.5 rounded text-gray-400 hover:text-gray-600 dark:hover:text-gray-200">
+                <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                  <line x1="18" y1="6" x2="6" y2="18"></line>
+                  <line x1="6" y1="6" x2="18" y2="18"></line>
+                </svg>
+              </button>
+            </div>
+            <div id="card-content-target" class="font-mono text-[11px] text-gray-400 mb-1 border-b border-white/10 pb-1">
+              that we discussed yesterday
+            </div>
+            <div id="card-content-desc" class="text-[var(--mac-text-primary)] leading-normal mb-1.5">
+              修饰先行词 feature，说明“哪一个功能”，从句中 discussed 缺少宾语，that 作为关系代词引导。
+            </div>
+            <div class="text-[10px] text-gray-400 flex items-center justify-between pt-0.5">
+              <span>Esc 或点击外部关闭</span>
+              <span class="text-[var(--mac-accent)]">可选择复制</span>
+            </div>
+          </div>
+
+        </div>
+        <!-- END OF FLOATING PANEL -->
+
+      </div>
+    </div>
+  </main>
+
+  <!-- ========================================================================================= -->
+  <!-- MODAL 1: SYSTEM SETTINGS WINDOW (`NSWindow` Style) -->
+  <!-- Classic macOS Sonoma Settings Layout with Sidebar & Segment Tabs -->
+  <!-- ========================================================================================= -->
+  <div id="settings-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-2xl h-[490px] rounded-2xl mac-vibrancy flex overflow-hidden shadow-2xl border border-[var(--panel-border)] animate-scaleUp">
+      
+      <!-- Settings Left Sidebar -->
+      <div class="w-48 bg-black/5 dark:bg-black/20 border-r border-[var(--mac-separator)] p-3 flex flex-col justify-between select-none">
+        <div class="space-y-1">
+          <!-- Window traffic lights -->
+          <div class="flex items-center gap-1.5 mb-4 pl-1 pt-1">
+            <div onclick="toggleSettingsModal(false)" class="w-3 h-3 rounded-full bg-[#FF5F56] border border-[#E0443E] cursor-pointer hover:opacity-80" title="关闭"></div>
+            <div class="w-3 h-3 rounded-full bg-[#FFBD2E] border border-[#DEA123]"></div>
+            <div class="w-3 h-3 rounded-full bg-[#27C93F] border border-[#1AAB29]"></div>
+          </div>
+
+          <div class="text-[11px] font-semibold text-[var(--mac-text-tertiary)] px-2 py-1 uppercase">偏好设置</div>
+
+          <!-- Tab Items -->
+          <button onclick="switchSettingsTab('general')" id="set-tab-general" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium bg-blue-600 text-white transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <circle cx="12" cy="12" r="3"></circle>
+              <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"></path>
+            </svg>
+            <span>通用设置</span>
+          </button>
+
+          <button onclick="switchSettingsTab('pronunciation')" id="set-tab-pronunciation" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium text-[var(--mac-text-secondary)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            <span>语音与发音</span>
+          </button>
+
+          <button onclick="switchSettingsTab('display')" id="set-tab-display" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium text-[var(--mac-text-secondary)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="2" y="3" width="20" height="14" rx="2" ry="2"></rect>
+              <line x1="8" y1="21" x2="16" y2="21"></line>
+              <line x1="12" y1="17" x2="12" y2="21"></line>
+            </svg>
+            <span>显示与浮窗</span>
+          </button>
+
+          <button onclick="switchSettingsTab('model')" id="set-tab-model" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium text-[var(--mac-text-secondary)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <path d="M12 2a10 10 0 0 0-10 10c0 4.42 2.87 8.17 6.84 9.5.5.08.66-.23.66-.5v-1.69c-2.77.6-3.36-1.34-3.36-1.34-.46-1.16-1.11-1.47-1.11-1.47-.91-.62.07-.6.07-.6 1 .07 1.53 1.03 1.53 1.03.87 1.52 2.34 1.07 2.91.83.1-.65.35-1.09.63-1.34-2.22-.25-4.55-1.11-4.55-4.92 0-1.11.38-2 1.03-2.71-.1-.25-.45-1.29.1-2.64 0 0 .84-.27 2.75 1.02.79-.22 1.65-.33 2.5-.33.85 0 1.71.11 2.5.33 1.91-1.29 2.75-1.02 2.75-1.02.55 1.35.2 2.39.1 2.64.65.71 1.03 1.6 1.03 2.71 0 3.82-2.34 4.66-4.57 4.91.36.31.69.92.69 1.85V21c0 .27.16.59.67.5C19.14 20.16 22 16.42 22 12A10 10 0 0 0 12 2z"></path>
+            </svg>
+            <span>LLM 模型配置</span>
+          </button>
+
+          <button onclick="switchSettingsTab('privacy')" id="set-tab-privacy" class="w-full flex items-center gap-2 px-2 py-1.5 rounded-lg text-xs font-medium text-[var(--mac-text-secondary)] hover:bg-black/5 dark:hover:bg-white/10 transition-colors">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <rect x="3" y="11" width="18" height="11" rx="2" ry="2"></rect>
+              <path d="M7 11V7a5 5 0 0 1 10 0v4"></path>
+            </svg>
+            <span>隐私与缓存</span>
+          </button>
+        </div>
+
+        <div class="px-2 text-[10px] text-gray-400">
+          Translator v1.0.0 (MVP)
+        </div>
+      </div>
+
+      <!-- Settings Main Content Area -->
+      <div class="flex-1 p-6 overflow-y-auto text-xs space-y-5 select-none">
+        
+        <!-- 1. GENERAL TAB -->
+        <div id="settings-content-general" class="space-y-4">
+          <div class="text-sm font-semibold text-[var(--mac-text-primary)] border-b border-[var(--mac-separator)] pb-2">通用设置</div>
+          
+          <!-- Launch at login -->
+          <div class="flex items-center justify-between py-1">
+            <div>
+              <div class="font-medium text-[var(--mac-text-primary)]">登录时自动启动</div>
+              <div class="text-[11px] text-[var(--mac-text-secondary)]">在 macOS 开机或登录后常驻菜单栏</div>
+            </div>
+            <div onclick="toggleSettingsSwitch(this)" class="mac-toggle active">
+              <div class="mac-toggle-thumb"></div>
+            </div>
+          </div>
+
+          <!-- Shortcut recorder -->
+          <div class="flex items-center justify-between py-1">
+            <div>
+              <div class="font-medium text-[var(--mac-text-primary)]">全局呼出快捷键</div>
+              <div class="text-[11px] text-[var(--mac-text-secondary)]">选中文本后按下即可显示翻译浮窗</div>
+            </div>
+            <div class="flex items-center gap-2">
+              <span class="mac-key py-1 px-2.5 text-xs bg-black/5 dark:bg-white/10 font-mono">⌥ Space</span>
+              <button class="px-2 py-1 rounded bg-black/5 dark:bg-white/10 hover:bg-black/10 text-[11px] text-[var(--mac-text-secondary)]">修改</button>
+            </div>
+          </div>
+
+          <!-- Accessibility Check -->
+          <div class="p-3 rounded-xl bg-blue-500/10 border border-blue-500/20 space-y-1">
+            <div class="flex items-center justify-between">
+              <span class="font-semibold text-blue-600 dark:text-blue-400">辅助功能权限 (Accessibility)</span>
+              <span class="text-[10px] bg-green-500/20 text-green-600 dark:text-green-400 px-2 py-0.5 rounded-full font-medium">已授权</span>
+            </div>
+            <div class="text-[11px] text-gray-500">已获得跨 App 读取选中文本权限，无需模拟按键即可秒级响应。</div>
+          </div>
+        </div>
+
+        <!-- 2. PRONUNCIATION TAB -->
+        <div id="settings-content-pronunciation" class="hidden space-y-4">
+          <div class="text-sm font-semibold text-[var(--mac-text-primary)] border-b border-[var(--mac-separator)] pb-2">发音设置 (AVSpeechSynthesizer)</div>
+          
+          <!-- Voice Accent -->
+          <div class="flex items-center justify-between py-1">
+            <div>
+              <div class="font-medium text-[var(--mac-text-primary)]">默认英语发音口音</div>
+              <div class="text-[11px] text-[var(--mac-text-secondary)]">使用系统原生内置语音引擎</div>
+            </div>
+            <select class="p-1.5 rounded-lg mac-subtle-card bg-transparent text-xs text-[var(--mac-text-primary)] border border-[var(--mac-card-border)] focus:outline-none">
+              <option value="en-US">美式英语 (Samantha - en-US)</option>
+              <option value="en-GB">英式英语 (Daniel - en-GB)</option>
+              <option value="en-AU">澳大利亚英语 (Karen - en-AU)</option>
+            </select>
+          </div>
+
+          <!-- Speech Rate Slider -->
+          <div class="space-y-1 py-1">
+            <div class="flex items-center justify-between">
+              <div class="font-medium text-[var(--mac-text-primary)]">播放语速</div>
+              <span id="speech-rate-val" class="text-xs text-[var(--mac-accent)] font-mono">1.0x</span>
+            </div>
+            <input type="range" min="0.5" max="1.5" step="0.1" value="1.0" 
+                   oninput="document.getElementById('speech-rate-val').innerText = this.value + 'x'"
+                   class="w-full accent-[var(--mac-accent)] cursor-pointer">
+            <div class="flex justify-between text-[10px] text-gray-400">
+              <span>0.5x 慢速</span>
+              <span>1.0x 正常</span>
+              <span>1.5x 快速</span>
+            </div>
+          </div>
+
+          <button onclick="playTTS('Testing macOS native speech synthesis for translation application.')" class="px-3 py-1.5 rounded-lg mac-subtle-card hover:bg-black/5 dark:hover:bg-white/10 text-[var(--mac-accent)] font-medium flex items-center gap-1.5">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+              <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"></polygon>
+              <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"></path>
+            </svg>
+            <span>试听发音效果</span>
+          </button>
+        </div>
+
+        <!-- 3. DISPLAY TAB -->
+        <div id="settings-content-display" class="hidden space-y-4">
+          <div class="text-sm font-semibold text-[var(--mac-text-primary)] border-b border-[var(--mac-separator)] pb-2">显示与浮窗行为</div>
+          
+          <div class="flex items-center justify-between py-1">
+            <div>
+              <div class="font-medium text-[var(--mac-text-primary)]">默认显示句子核心主干</div>
+              <div class="text-[11px] text-[var(--mac-text-secondary)]">英译中长句时在顶部醒目提取主干</div>
+            </div>
+            <div onclick="toggleSettingsSwitch(this)" class="mac-toggle active">
+              <div class="mac-toggle-thumb"></div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between py-1">
+            <div>
+              <div class="font-medium text-[var(--mac-text-primary)]">默认展开语法结构标注</div>
+              <div class="text-[11px] text-[var(--mac-text-secondary)]">关闭时首屏只显示翻译，点击后才展开</div>
+            </div>
+            <div onclick="toggleSettingsSwitch(this)" class="mac-toggle">
+              <div class="mac-toggle-thumb"></div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between py-1">
+            <div>
+              <div class="font-medium text-[var(--mac-text-primary)]">浮窗失焦自动关闭</div>
+              <div class="text-[11px] text-[var(--mac-text-secondary)]">点击其他窗口任意区域时自动隐藏 Panel</div>
+            </div>
+            <div onclick="toggleSettingsSwitch(this)" class="mac-toggle active">
+              <div class="mac-toggle-thumb"></div>
+            </div>
+          </div>
+        </div>
+
+        <!-- 4. MODEL / LLM TAB -->
+        <div id="settings-content-model" class="hidden space-y-4">
+          <div class="text-sm font-semibold text-[var(--mac-text-primary)] border-b border-[var(--mac-separator)] pb-2">LLM 模型与 API 配置</div>
+          
+          <div class="space-y-1">
+            <label class="block font-medium text-[var(--mac-text-primary)]">LLM 服务商 (兼容 OpenAI 格式)</label>
+            <select class="w-full p-2 rounded-lg mac-subtle-card bg-transparent text-xs text-[var(--mac-text-primary)] border border-[var(--mac-card-border)] focus:outline-none">
+              <option>OpenAI (官方 / 兼容中转)</option>
+              <option>Anthropic Claude</option>
+              <option>本地 Ollama / LM Studio (离线隐私)</option>
+            </select>
+          </div>
+
+          <div class="space-y-1">
+            <label class="block font-medium text-[var(--mac-text-primary)]">API Key</label>
+            <div class="relative">
+              <input type="password" value="sk-live94720184729184019284" class="w-full p-2 rounded-lg bg-black/5 dark:bg-white/5 border border-[var(--mac-card-border)] focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono text-xs">
+              <span class="absolute right-3 top-2.5 text-[10px] text-green-500 font-medium">已保存在 Keychain</span>
+            </div>
+            <div class="text-[10px] text-gray-400">密钥安全存储在 macOS Keychain，不在任何云端传输。</div>
+          </div>
+
+          <div class="space-y-1">
+            <label class="block font-medium text-[var(--mac-text-primary)]">模型名称</label>
+            <input type="text" value="gpt-4o-mini" class="w-full p-2 rounded-lg bg-black/5 dark:bg-white/5 border border-[var(--mac-card-border)] focus:ring-1 focus:ring-blue-500 focus:outline-none font-mono text-xs">
+            <div class="text-[10px] text-gray-400">推荐使用轻量高速模型，Fast Analyze 延迟 &lt;600ms。</div>
+          </div>
+        </div>
+
+        <!-- 5. PRIVACY & CACHE TAB -->
+        <div id="settings-content-privacy" class="hidden space-y-4">
+          <div class="text-sm font-semibold text-[var(--mac-text-primary)] border-b border-[var(--mac-separator)] pb-2">隐私与本地 SQLite 缓存</div>
+          
+          <div class="flex items-center justify-between py-1">
+            <div>
+              <div class="font-medium text-[var(--mac-text-primary)]">启用本地离线缓存 (SQLite)</div>
+              <div class="text-[11px] text-[var(--mac-text-secondary)]">重复查询相同词句时无需调用网络，耗时 &lt;10ms</div>
+            </div>
+            <div onclick="toggleSettingsSwitch(this)" class="mac-toggle active">
+              <div class="mac-toggle-thumb"></div>
+            </div>
+          </div>
+
+          <div class="flex items-center justify-between py-1">
+            <div>
+              <div class="font-medium text-[var(--mac-text-primary)]">仅在内存缓存，退出即清空</div>
+              <div class="text-[11px] text-[var(--mac-text-secondary)]">保护敏感代码与商业机密文本不写入磁盘</div>
+            </div>
+            <div onclick="toggleSettingsSwitch(this)" class="mac-toggle">
+              <div class="mac-toggle-thumb"></div>
+            </div>
+          </div>
+
+          <div class="p-3 rounded-xl mac-subtle-card flex items-center justify-between">
+            <div>
+              <div class="font-medium text-[var(--mac-text-primary)]">当前缓存占用</div>
+              <div class="text-[11px] text-[var(--mac-text-secondary)]">1.2 MB · 142 条翻译与语法解析记录</div>
+            </div>
+            <button onclick="clearAllCache()" class="px-3 py-1.5 rounded-lg bg-red-500/10 hover:bg-red-500/20 text-red-600 dark:text-red-400 font-medium transition-colors">
+              清空所有缓存
+            </button>
+          </div>
+        </div>
+
+      </div>
+
+    </div>
+  </div>
+
+  <!-- ========================================================================================= -->
+  <!-- MODAL 2: ACCESSIBILITY PERMISSION GUIDE (macOS System Prompt) -->
+  <!-- ========================================================================================= -->
+  <div id="permission-modal" class="hidden fixed inset-0 z-50 bg-black/50 backdrop-blur-sm flex items-center justify-center p-4">
+    <div class="w-full max-w-md p-6 rounded-2xl mac-vibrancy border border-[var(--panel-border)] shadow-2xl text-center space-y-4 animate-scaleUp">
+      <div class="w-16 h-16 mx-auto rounded-2xl bg-blue-500 text-white flex items-center justify-center shadow-lg">
+        <svg class="w-9 h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <path d="M12 8v4"></path>
+          <path d="M12 16h.01"></path>
+        </svg>
+      </div>
+
+      <div class="space-y-1">
+        <h3 class="text-base font-semibold text-[var(--mac-text-primary)]">需要开启 macOS 辅助功能权限</h3>
+        <p class="text-xs text-[var(--mac-text-secondary)] leading-relaxed">
+          为了在 VS Code、Safari、Slack 等任意应用中自动获取您鼠标选中的文字，请在系统设置中允许 Translator 访问。
+        </p>
+      </div>
+
+      <!-- Visual Step Guide -->
+      <div class="p-3 rounded-xl bg-black/5 dark:bg-white/5 text-xs text-left space-y-1.5 border border-[var(--mac-separator)]">
+        <div class="flex items-center gap-2 text-[var(--mac-text-primary)]">
+          <span class="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-bold">1</span>
+          <span>点击下方按钮打开「系统设置」</span>
+        </div>
+        <div class="flex items-center gap-2 text-[var(--mac-text-primary)]">
+          <span class="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-bold">2</span>
+          <span>前往「隐私与安全性」→「辅助功能」</span>
+        </div>
+        <div class="flex items-center gap-2 text-[var(--mac-text-primary)]">
+          <span class="w-4 h-4 rounded-full bg-blue-500 text-white text-[10px] flex items-center justify-center font-bold">3</span>
+          <span>开启「Translator」对应的开关</span>
+        </div>
+      </div>
+
+      <div class="flex items-center justify-center gap-3 pt-2">
+        <button onclick="togglePermissionModal(false)" class="px-4 py-1.5 rounded-lg mac-subtle-card hover:bg-black/5 dark:hover:bg-white/10 text-xs text-[var(--mac-text-secondary)] font-medium transition-colors">
+          稍后再说
+        </button>
+        <button onclick="simulateGrantPermission()" class="px-5 py-1.5 rounded-lg bg-[var(--mac-accent)] hover:bg-blue-600 text-white text-xs font-medium shadow transition-colors">
+          打开系统设置
+        </button>
+      </div>
+    </div>
+  </div>
+
+  <!-- ========================================================================================= -->
+  <!-- DRAWER: HIG DESIGN TOKENS & INTERACTION SPECIFICATION ANNOTATIONS -->
+  <!-- ========================================================================================= -->
+  <aside id="spec-drawer" class="fixed right-0 top-12 bottom-0 w-96 mac-vibrancy border-l border-[var(--panel-border)] shadow-2xl z-40 p-5 overflow-y-auto transform translate-x-full transition-transform duration-300 select-text text-xs space-y-5">
+    <div class="flex items-center justify-between border-b border-[var(--mac-separator)] pb-3">
+      <div class="font-bold text-sm text-[var(--mac-text-primary)] flex items-center gap-1.5">
+        <svg class="w-4 h-4 text-blue-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <circle cx="12" cy="12" r="10"></circle>
+          <line x1="12" y1="16" x2="12" y2="12"></line>
+          <line x1="12" y1="8" x2="12.01" y2="8"></line>
+        </svg>
+        <span>Apple HIG 交互规范注解</span>
+      </div>
+      <button onclick="toggleSpecDrawer(false)" class="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10 text-gray-400">✕</button>
+    </div>
+
+    <!-- Section 1: Philosophy -->
+    <div class="space-y-2">
+      <div class="font-semibold text-[var(--mac-text-primary)] uppercase tracking-wider text-[11px]">1. 悬浮面板设计哲学</div>
+      <p class="text-gray-500 leading-relaxed">
+        遵循 macOS <strong>Utility Panel (NSPanel)</strong> 规范。不抢占当前活动应用的焦点，首屏只呈现翻译结果。宽度统一为 <strong>410px</strong>，最大高度 <strong>520px</strong>，内容过长时使用原生 macOS 叠加滚动条。
+      </p>
+    </div>
+
+    <!-- Section 2: Grammar Tokens -->
+    <div class="space-y-2">
+      <div class="font-semibold text-[var(--mac-text-primary)] uppercase tracking-wider text-[11px]">2. 句子成分可视化映射规范 (PRD §7)</div>
+      <div class="p-3 rounded-xl bg-black/5 dark:bg-white/5 space-y-2 font-mono text-[11px]">
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-1 bg-[#007AFF] rounded"></span>主语 (Subject)</span>
+          <span class="text-gray-400">蓝色实线下划线</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-1 bg-[#FF9500] rounded"></span>谓语 (Predicate)</span>
+          <span class="text-gray-400">橙色实线下划线</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-1 bg-[#34C759] rounded"></span>宾语 (Object)</span>
+          <span class="text-gray-400">绿色实线下划线</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-1 bg-[#AF52DE] rounded"></span>补语 (Complement)</span>
+          <span class="text-gray-400">紫色实线下划线</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-0.5 border-b border-dashed border-[#8E8E93]"></span>状语 (Adverbial)</span>
+          <span class="text-gray-400">灰色虚线下划线</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-blue-500/20 border border-blue-400"></span>定语从句</span>
+          <span class="text-gray-400">蓝色半透明圆角方框</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-orange-500/20 border border-orange-400"></span>条件从句</span>
+          <span class="text-gray-400">橙色半透明方框</span>
+        </div>
+        <div class="flex items-center justify-between">
+          <span class="flex items-center gap-1.5"><span class="w-3 h-2 rounded bg-red-500/20 border border-red-400"></span>让步从句</span>
+          <span class="text-gray-400">红色半透明方框</span>
+        </div>
+      </div>
+    </div>
+
+    <!-- Section 3: Hover & Pin Card Interaction -->
+    <div class="space-y-2">
+      <div class="font-semibold text-[var(--mac-text-primary)] uppercase tracking-wider text-[11px]">3. 交互微动效与固定机制</div>
+      <ul class="list-disc pl-4 space-y-1 text-gray-500">
+        <li><strong>Hover 延迟：</strong>悬停 250ms 后轻量浮出说明气泡，避免快速扫视产生视觉闪烁。</li>
+        <li><strong>点击固定 (Pin)：</strong>触控板轻按即可 Pin 住说明卡片，用户可自由选择复制卡片内文字。</li>
+        <li><strong>Esc 快捷关闭：</strong>按下 Esc 或点击外部区域立即解除固定。</li>
+        <li><strong>降级容错：</strong>若语法结构校验失败，降级展示纯翻译，绝不让用户面临空白错误。</li>
+      </ul>
+    </div>
+
+    <!-- Section 4: Swift / SwiftUI Implementation Guideline -->
+    <div class="space-y-2">
+      <div class="font-semibold text-[var(--mac-text-primary)] uppercase tracking-wider text-[11px]">4. 原生 Swift 技术落地指引</div>
+      <div class="p-2.5 rounded-lg bg-black/10 dark:bg-black/40 font-mono text-[10px] text-gray-400 space-y-1">
+        <div>• 浮窗：<code>NSPanel(styleMask: [.nonactivatingPanel, .fullSizeContentView])</code></div>
+        <div>• 材质：<code>NSVisualEffectView(material: .popover, blendingMode: .behindWindow)</code></div>
+        <div>• 选中取词：<code>AXUIElementCopyAttributeValue(systemWide, kAXFocusedUIElementAttribute)</code></div>
+        <div>• 降级兜底：模拟 <code>CGEvent(keyboardEventSource)</code> ⌘C</div>
+        <div>• 语法高亮：<code>NSTextView</code> + <code>NSAttributedString</code> Range</div>
+      </div>
+    </div>
+  </aside>
+
+  <!-- Toast Notification Container -->
+  <div id="toast-container" class="fixed bottom-6 left-1/2 -translate-x-1/2 z-50 pointer-events-none transition-all duration-300 opacity-0 transform translate-y-2">
+    <div class="px-4 py-2 rounded-xl mac-vibrancy border border-[var(--panel-border)] shadow-xl text-xs font-medium text-[var(--mac-text-primary)] flex items-center gap-2">
+      <svg class="w-4 h-4 text-green-500" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+        <polyline points="20 6 9 17 4 12"></polyline>
+      </svg>
+      <span id="toast-message">已复制到剪贴板</span>
+    </div>
+  </div>
+
+  <!-- ========================================================================================= -->
+  <!-- JAVASCRIPT: DATA STRUCTURES, INTERACTIVE CONTROLS, AUDIO TTS, & KEYBOARD LISTENERS -->
+  <!-- ========================================================================================= -->
+  <script>
+    // -------------------------------------------------------------------------------------------
+    // SCENARIO DATA REPOSITORY (Conforms strictly to PRD Section 10.3 Structured Schema)
+    // -------------------------------------------------------------------------------------------
+    const SCENARIOS = {
+      // 1. English Word: architecture
+      word_arch: {
+        type: 'word',
+        sourceText: 'architecture',
+        ipa: '/ˈɑːrkɪtektʃər/',
+        langBadge: 'English → 中文',
+        translation: '架构；体系结构；建筑学',
+        pos: ['n. 名词'],
+        collocations: [
+          { text: 'software architecture', meaning: '软件架构' },
+          { text: 'modular architecture', meaning: '模块化架构' },
+          { text: 'system architecture', meaning: '系统体系结构' }
+        ],
+        examples: [
+          { en: 'The system uses a clean modular architecture.', zh: '该系统采用了清晰的模块化架构。' }
+        ],
+        tone: null,
+        cacheHit: true
+      },
+
+      // 2. English Simple Sentence: The feature that we discussed yesterday has been implemented.
+      sentence_simple: {
+        type: 'sentence',
+        sourceText: 'The feature that we discussed yesterday has been implemented.',
+        ipa: null,
+        langBadge: 'English → 中文',
+        translation: '我们昨天讨论的功能已经实现了。',
+        skeleton: 'The feature has been implemented.',
+        chunks: [
+          { text: 'The feature', role: 'subject', roleName: '主语', desc: '句子核心主语，指代所讨论的功能特性。' },
+          { 
+            text: 'that we discussed yesterday', 
+            role: 'clause', 
+            clauseType: 'relative', 
+            roleName: '定语从句', 
+            desc: '修饰主语 feature，关系代词 that 在从句中充当 discussed 的宾语，说明“哪一个功能”。' 
+          },
+          { 
+            text: 'has been implemented', 
+            role: 'predicate', 
+            roleName: '谓语', 
+            desc: '现在完成时 (has been) + 被动语态 (implemented)，表示过去发生并已完成的状态影响到现在。' 
+          }
+        ],
+        grammarPoints: [
+          { name: '定语从句 (Relative Clause)', desc: '由 that 引导修饰先行词 the feature，限定具体讨论的对象。' },
+          { name: '时态与语态', desc: '现在完成时 + 被动语态 (has been implemented)，表明功能已由团队开发完毕。' }
+        ],
+        tone: null,
+        cacheHit: false
+      },
+
+      // 3. English Complex Sentence: Although the system was originally designed for small teams, it has gradually evolved into a platform that can support thousands of users.
+      sentence_complex: {
+        type: 'sentence',
+        sourceText: 'Although the system was originally designed for small teams, it has gradually evolved into a platform that can support thousands of users.',
+        ipa: null,
+        langBadge: 'English → 中文',
+        translation: '虽然该系统最初是为小型团队设计的，但它已经逐渐发展成一个能够支持数千名用户的平台。',
+        skeleton: 'it has evolved into a platform',
+        chunks: [
+          { 
+            text: 'Although the system was originally designed for small teams', 
+            role: 'clause', 
+            clauseType: 'concession', 
+            roleName: '让步状语从句', 
+            desc: '由 Although 引导的让步状语从句，陈述最初为小团队设计的客观历史背景。' 
+          },
+          { text: 'it', role: 'subject', roleName: '主句主语', desc: '代词 it 代指主句主体 the system。' },
+          { 
+            text: 'has gradually evolved', 
+            role: 'predicate', 
+            roleName: '主句谓语', 
+            desc: '现在完成时 (has evolved)，副词 gradually 作状语修饰演进过程。' 
+          },
+          { text: 'into a platform', role: 'complement', roleName: '补语/介词短语', desc: '说明演进的最终结果形态。' },
+          { 
+            text: 'that can support thousands of users', 
+            role: 'clause', 
+            clauseType: 'relative', 
+            roleName: '定语从句', 
+            desc: '修饰先行词 platform，that 在从句中作主语，can support 表示技术承载能力。' 
+          }
+        ],
+        grammarPoints: [
+          { name: '让步状语从句 (Concession)', desc: 'Although... 引导对比，体现系统规模跨越式成长的语境。' },
+          { name: '现在完成时态', desc: 'has evolved 表示系统经过持续演化达到当下的成熟状态。' },
+          { name: '定语从句修饰', desc: 'that can support... 精确限定平台当前支持的用户承载量级。' }
+        ],
+        tone: null,
+        cacheHit: true
+      },
+
+      // 4. Chinese to English Natural Expression: 这个方案可以先作为一个兜底方案。
+      chinese_expr: {
+        type: 'chinese',
+        sourceText: '这个方案可以先作为一个兜底方案。',
+        ipa: null,
+        langBadge: '中文 → English',
+        translation: 'We can use this as a fallback for now.',
+        tone: '日常技术沟通 · 自然地道',
+        alternatives: [
+          { 
+            en: 'We can use this as a fallback for now.', 
+            desc: '自然日常，适合日常代码审查或技术沟通，用词轻快准确。' 
+          },
+          { 
+            en: 'This can serve as a fallback solution for now.', 
+            desc: '更加正式，适合撰写技术方案设计文档 (RFC) 或向领导汇报。' 
+          },
+          { 
+            en: 'Let\'s keep this as a contingency measure in the interim.', 
+            desc: '更加严谨的书面架构术语，强调应对突发风险。' 
+          }
+        ],
+        note: '“兜底方案”在现代软件工程中标准对应为 fallback ；而表达“先这么做”时，英文习惯用 for now 或 in the interim，比直译 first 更地道。',
+        cacheHit: true
+      },
+
+      // 5. Empty State
+      empty_state: {
+        type: 'empty',
+        sourceText: '',
+        langBadge: '自动检测',
+        translation: '',
+        cacheHit: false
+      },
+
+      // 6. Permission Alert
+      permission_alert: {
+        type: 'permission',
+        cacheHit: false
+      },
+
+      // 7. Error / Retry State
+      error_retry: {
+        type: 'error',
+        cacheHit: false
+      }
+    };
+
+    // Current Active State
+    let currentScenarioId = 'word_arch';
+    let isGrammarExpanded = false;
+    let isPanelPinned = false;
+    let isPanelOpen = true;
+    let pinnedTooltip = null;
+    let hoverTimeout = null;
+
+    // -------------------------------------------------------------------------------------------
+    // SCENARIO SWITCHER
+    // -------------------------------------------------------------------------------------------
+    function switchScenario(scenarioId) {
+      currentScenarioId = scenarioId;
+      isGrammarExpanded = false;
+      unpinGrammarCard();
+
+      // Update Top Nav Button States
+      document.querySelectorAll('.scenario-btn').forEach(btn => {
+        btn.classList.remove('bg-blue-600', 'text-white');
+        btn.classList.add('text-white/70', 'hover:bg-white/10');
+      });
+      const activeBtn = document.getElementById('tab-' + scenarioId);
+      if (activeBtn) {
+        activeBtn.classList.add('bg-blue-600', 'text-white');
+        activeBtn.classList.remove('text-white/70');
+      }
+
+      // Handle Permission Alert Modal
+      if (scenarioId === 'permission_alert') {
+        togglePermissionModal(true);
+        return;
+      } else {
+        togglePermissionModal(false);
+      }
+
+      // Ensure panel is open
+      togglePanel(true);
+
+      const data = SCENARIOS[scenarioId];
+      if (!data) return;
+
+      // Update Cursor position and Mockup text highlight
+      updateMockupContext(scenarioId, data);
+
+      // Render the Panel
+      renderPanelContent(data);
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // RENDER PANEL CONTENT BASED ON SCHEMA
+    // -------------------------------------------------------------------------------------------
+    function renderPanelContent(data) {
+      // Hide all dynamic conditional sections first
+      document.getElementById('word-details-section').classList.add('hidden');
+      document.getElementById('sentence-grammar-section').classList.add('hidden');
+      document.getElementById('chinese-expr-section').classList.add('hidden');
+      document.getElementById('empty-state-section').classList.add('hidden');
+      document.getElementById('error-state-section').classList.add('hidden');
+      document.getElementById('translation-tone-badge').classList.add('hidden');
+      document.getElementById('source-ipa-container').classList.add('hidden');
+      document.getElementById('word-pos-container').classList.add('hidden');
+
+      // Update Header Lang Badge
+      document.getElementById('panel-lang-badge').innerText = data.langBadge || 'English → 中文';
+
+      // Cache hit indicator
+      const cacheBadge = document.getElementById('cache-hit-badge');
+      if (data.cacheHit) {
+        cacheBadge.classList.remove('hidden');
+      } else {
+        cacheBadge.classList.add('hidden');
+      }
+
+      // Handle Error Scenario
+      if (data.type === 'error') {
+        document.getElementById('error-state-section').classList.remove('hidden');
+        document.getElementById('source-text-container').innerText = 'The system architecture...';
+        document.getElementById('translation-text-container').innerText = '翻译未完成';
+        return;
+      }
+
+      // Handle Empty Input Scenario
+      if (data.type === 'empty') {
+        document.getElementById('empty-state-section').classList.remove('hidden');
+        document.getElementById('source-text-container').innerText = '等待输入...';
+        document.getElementById('translation-text-container').innerText = '—';
+        return;
+      }
+
+      // Set Source Text & Translation
+      document.getElementById('source-text-container').innerText = data.sourceText;
+      document.getElementById('translation-text-container').innerText = data.translation;
+
+      // Handle Word Mode
+      if (data.type === 'word') {
+        if (data.ipa) {
+          document.getElementById('source-ipa-container').classList.remove('hidden');
+          document.getElementById('source-ipa-text').innerText = data.ipa;
+        }
+        if (data.pos && data.pos.length > 0) {
+          const posContainer = document.getElementById('word-pos-container');
+          posContainer.classList.remove('hidden');
+          posContainer.innerHTML = data.pos.map(p => `<span class="text-[11px] px-2 py-0.5 rounded bg-black/5 dark:bg-white/10 font-semibold text-[var(--mac-accent)]">${p}</span>`).join('');
+        }
+        document.getElementById('word-details-section').classList.remove('hidden');
+      }
+
+      // Handle Sentence Mode
+      if (data.type === 'sentence') {
+        const sentenceSec = document.getElementById('sentence-grammar-section');
+        sentenceSec.classList.remove('hidden');
+
+        // Reset expanded state
+        document.getElementById('grammar-expanded-view').classList.add('hidden');
+        document.getElementById('btn-expand-grammar').classList.remove('hidden');
+
+        // Prepare Skeleton
+        document.getElementById('skeleton-text').innerText = data.skeleton;
+
+        // Render Annotated Chunks
+        renderAnnotatedSentence(data.chunks);
+
+        // Render Grammar Points Breakdown
+        renderGrammarPoints(data.grammarPoints);
+      }
+
+      // Handle Chinese to English Expression Mode
+      if (data.type === 'chinese') {
+        document.getElementById('chinese-expr-section').classList.remove('hidden');
+        if (data.tone) {
+          const toneBadge = document.getElementById('translation-tone-badge');
+          toneBadge.classList.remove('hidden');
+          toneBadge.innerHTML = `<span>💡 ${data.tone}</span>`;
+        }
+        renderChineseAlternatives(data.alternatives);
+        document.getElementById('chinese-expr-note').innerHTML = data.note;
+      }
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // RENDER ANNOTATED SENTENCE CHUNKS & CLAUSES (PRD §7)
+    // -------------------------------------------------------------------------------------------
+    function renderAnnotatedSentence(chunks) {
+      const container = document.getElementById('annotated-sentence-box');
+      if (!chunks || chunks.length === 0) {
+        container.innerHTML = '暂无语法标注数据';
+        return;
+      }
+
+      let html = '';
+      chunks.forEach((chunk, index) => {
+        if (chunk.role === 'clause') {
+          // Render as a Clause bounding box
+          let clauseClass = 'clause-relative';
+          if (chunk.clauseType === 'concession') clauseClass = 'clause-concession';
+          if (chunk.clauseType === 'conditional') clauseClass = 'clause-conditional';
+
+          html += `<span class="clause-box ${clauseClass}" 
+                        onmouseenter="handleChunkHover(this, ${index})" 
+                        onmouseleave="handleChunkLeave(this, ${index})"
+                        onclick="handleChunkClick(this, ${index})"
+                        data-chunk-idx="${index}">[ ${chunk.text} ]</span> `;
+        } else {
+          // Render with Underline style
+          let underlineClass = 'chunk-subject';
+          if (chunk.role === 'predicate') underlineClass = 'chunk-predicate';
+          if (chunk.role === 'object') underlineClass = 'chunk-object';
+          if (chunk.role === 'complement') underlineClass = 'chunk-complement';
+          if (chunk.role === 'adverbial') underlineClass = 'chunk-adverbial';
+
+          html += `<span class="grammar-chunk ${underlineClass}" 
+                        onmouseenter="handleChunkHover(this, ${index})" 
+                        onmouseleave="handleChunkLeave(this, ${index})"
+                        onclick="handleChunkClick(this, ${index})"
+                        data-chunk-idx="${index}">${chunk.text}</span> `;
+        }
+      });
+
+      container.innerHTML = html;
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // RENDER GRAMMAR POINTS BREAKDOWN
+    // -------------------------------------------------------------------------------------------
+    function renderGrammarPoints(points) {
+      const list = document.getElementById('grammar-points-list');
+      if (!points || points.length === 0) {
+        list.innerHTML = '<div class="text-gray-400">无复杂语法点</div>';
+        return;
+      }
+
+      list.innerHTML = points.map(p => `
+        <div class="p-2 rounded-lg bg-black/5 dark:bg-white/5 space-y-0.5">
+          <div class="font-medium text-[var(--mac-text-primary)] flex items-center gap-1.5">
+            <span class="w-1.5 h-1.5 rounded-full bg-blue-500"></span>
+            <span>${p.name}</span>
+          </div>
+          <div class="text-[11px] text-[var(--mac-text-secondary)] pl-3 leading-relaxed">${p.desc}</div>
+        </div>
+      `).join('');
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // RENDER CHINESE TO ENGLISH ALTERNATIVES
+    // -------------------------------------------------------------------------------------------
+    function renderChineseAlternatives(alts) {
+      const list = document.getElementById('chinese-alternatives-list');
+      if (!alts || alts.length === 0) {
+        list.innerHTML = '';
+        return;
+      }
+
+      list.innerHTML = alts.map((alt, i) => `
+        <div class="p-2.5 rounded-xl mac-subtle-card space-y-1 hover:border-blue-500/40 transition-colors">
+          <div class="flex items-center justify-between">
+            <div class="font-medium text-[var(--mac-text-primary)] text-[13px] font-mono">${alt.en}</div>
+            <button onclick="copyText('${alt.en.replace(/'/g, "\\'")}', '已复制表达')" class="p-1 rounded hover:bg-black/5 dark:hover:bg-white/10 text-gray-400 hover:text-white" title="复制此表达">
+              <svg class="w-3 h-3" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <rect x="9" y="9" width="13" height="13" rx="2" ry="2"></rect>
+                <path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"></path>
+              </svg>
+            </button>
+          </div>
+          <div class="text-[11px] text-[var(--mac-text-secondary)]">${alt.desc}</div>
+        </div>
+      `).join('');
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // GRAMMAR TOOLTIP HOVER & PIN BEHAVIOR (PRD §7.3)
+    // -------------------------------------------------------------------------------------------
+    function handleChunkHover(elem, chunkIndex) {
+      if (pinnedTooltip) return; // don't override pinned card
+
+      clearTimeout(hoverTimeout);
+      // Apple HIG 200-300ms hover delay
+      hoverTimeout = setTimeout(() => {
+        positionAndShowTooltip(elem, chunkIndex, false);
+      }, 250);
+    }
+
+    function handleChunkLeave(elem, chunkIndex) {
+      clearTimeout(hoverTimeout);
+      if (pinnedTooltip) return;
+      hideTooltip();
+    }
+
+    function handleChunkClick(elem, chunkIndex) {
+      clearTimeout(hoverTimeout);
+      pinnedTooltip = chunkIndex;
+      positionAndShowTooltip(elem, chunkIndex, true);
+    }
+
+    function positionAndShowTooltip(elem, chunkIndex, isPinned) {
+      const data = SCENARIOS[currentScenarioId];
+      if (!data || !data.chunks) return;
+      const chunk = data.chunks[chunkIndex];
+      if (!chunk) return;
+
+      const card = document.getElementById('grammar-tooltip-card');
+      const panel = document.getElementById('floating-panel');
+
+      // Populate card text
+      document.getElementById('card-badge-role').innerText = chunk.roleName || '语法成分';
+      document.getElementById('card-content-target').innerText = chunk.text;
+      document.getElementById('card-content-desc').innerText = chunk.desc;
+
+      const pinnedTag = document.getElementById('card-pinned-tag');
+      if (isPinned) {
+        pinnedTag.classList.remove('hidden');
+      } else {
+        pinnedTag.classList.add('hidden');
+      }
+
+      // Calculate relative position within the panel
+      const elemRect = elem.getBoundingClientRect();
+      const panelRect = panel.getBoundingClientRect();
+
+      let left = elemRect.left - panelRect.left;
+      let top = elemRect.top - panelRect.top - 8;
+
+      // Boundary safety
+      if (left + 260 > panelRect.width) {
+        left = panelRect.width - 270;
+      }
+      if (left < 10) left = 10;
+
+      card.style.left = `${left}px`;
+      card.style.top = `${top}px`;
+      card.classList.remove('hidden');
+    }
+
+    function hideTooltip() {
+      if (pinnedTooltip) return;
+      const card = document.getElementById('grammar-tooltip-card');
+      card.classList.add('hidden');
+    }
+
+    function unpinGrammarCard() {
+      pinnedTooltip = null;
+      const card = document.getElementById('grammar-tooltip-card');
+      card.classList.add('hidden');
+      showToast('已取消语法卡片固定');
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // EXPAND / COLLAPSE SENTENCE GRAMMAR (Fast Analyze vs Deep Analyze)
+    // -------------------------------------------------------------------------------------------
+    function expandSentenceGrammar() {
+      isGrammarExpanded = true;
+      document.getElementById('btn-expand-grammar').classList.add('hidden');
+      const expandedView = document.getElementById('grammar-expanded-view');
+      expandedView.classList.remove('hidden');
+
+      // Smooth scroll inside panel
+      const scrollBody = document.getElementById('panel-scroll-body');
+      setTimeout(() => {
+        scrollBody.scrollTo({ top: scrollBody.scrollHeight, behavior: 'smooth' });
+      }, 100);
+    }
+
+    function collapseSentenceGrammar() {
+      isGrammarExpanded = false;
+      document.getElementById('grammar-expanded-view').classList.add('hidden');
+      document.getElementById('btn-expand-grammar').classList.remove('hidden');
+      unpinGrammarCard();
+    }
+
+    function toggleWordDetails() {
+      const content = document.getElementById('word-details-content');
+      const arrow = document.getElementById('word-details-arrow');
+      content.classList.toggle('hidden');
+      arrow.classList.toggle('rotate-90');
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // PANEL CONTROLS (Pin, Close, Open, Language Menu)
+    // -------------------------------------------------------------------------------------------
+    function togglePanel(show) {
+      const panel = document.getElementById('floating-panel');
+      if (show === undefined) {
+        isPanelOpen = !isPanelOpen;
+      } else {
+        isPanelOpen = show;
+      }
+
+      if (isPanelOpen) {
+        panel.classList.remove('hidden', 'opacity-0', 'scale-95');
+        panel.classList.add('opacity-100', 'scale-100');
+      } else {
+        panel.classList.add('opacity-0', 'scale-95');
+        setTimeout(() => {
+          if (!isPanelOpen) panel.classList.add('hidden');
+        }, 150);
+      }
+    }
+
+    function togglePinPanel() {
+      isPanelPinned = !isPanelPinned;
+      const pinBtn = document.getElementById('btn-pin');
+      if (isPanelPinned) {
+        pinBtn.classList.add('text-blue-500', 'bg-blue-500/10');
+        showToast('已固定浮窗 (失焦不自动关闭)');
+      } else {
+        pinBtn.classList.remove('text-blue-500', 'bg-blue-500/10');
+        showToast('已取消固定');
+      }
+    }
+
+    function toggleLanguageSelector() {
+      const menu = document.getElementById('lang-menu');
+      menu.classList.toggle('hidden');
+    }
+
+    function selectLanguage(mode) {
+      document.getElementById('lang-menu').classList.add('hidden');
+      if (mode === 'en2zh') {
+        document.getElementById('panel-lang-badge').innerText = '英语 → 中文';
+        showToast('已手动切换为: 英语 → 中文');
+      } else if (mode === 'zh2en') {
+        document.getElementById('panel-lang-badge').innerText = '中文 → 英语';
+        showToast('已手动切换为: 中文 → 英语');
+      } else {
+        document.getElementById('panel-lang-badge').innerText = '自动检测';
+        showToast('已开启自动语言识别');
+      }
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // AUDIO PRONUNCIATION (AVSpeechSynthesizer Web Speech API Simulation)
+    // -------------------------------------------------------------------------------------------
+    function playTTS(customText) {
+      const data = SCENARIOS[currentScenarioId];
+      const textToSpeak = customText || (data ? data.sourceText : 'Hello world');
+      const lang = (data && data.langBadge && data.langBadge.includes('中文 →')) ? 'zh-CN' : 'en-US';
+
+      // UI wave animation toggle
+      const defaultIcon = document.getElementById('tts-icon-default');
+      const speakingIcon = document.getElementById('tts-icon-speaking');
+      defaultIcon.classList.add('hidden');
+      speakingIcon.classList.remove('hidden');
+
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const utterance = new SpeechSynthesisUtterance(textToSpeak);
+        utterance.lang = lang;
+        utterance.rate = 0.95;
+
+        utterance.onend = () => {
+          defaultIcon.classList.remove('hidden');
+          speakingIcon.classList.add('hidden');
+        };
+        utterance.onerror = () => {
+          defaultIcon.classList.remove('hidden');
+          speakingIcon.classList.add('hidden');
+        };
+        window.speechSynthesis.speak(utterance);
+      } else {
+        setTimeout(() => {
+          defaultIcon.classList.remove('hidden');
+          speakingIcon.classList.add('hidden');
+          showToast('模拟播放发音完成');
+        }, 1200);
+      }
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // CLIPBOARD ACTIONS
+    // -------------------------------------------------------------------------------------------
+    function copySourceText() {
+      const text = document.getElementById('source-text-container').innerText;
+      copyText(text, '已复制原文');
+    }
+
+    function copyTranslationText() {
+      const text = document.getElementById('translation-text-container').innerText;
+      copyText(text, '已复制译文');
+    }
+
+    function copyText(text, successMsg) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast(successMsg);
+      }).catch(() => {
+        showToast(successMsg + ': ' + text);
+      });
+    }
+
+    function showToast(msg) {
+      const container = document.getElementById('toast-container');
+      const label = document.getElementById('toast-message');
+      label.innerText = msg;
+      container.classList.remove('opacity-0', 'translate-y-2');
+      container.classList.add('opacity-100', 'translate-y-0');
+
+      clearTimeout(window.toastTimer);
+      window.toastTimer = setTimeout(() => {
+        container.classList.remove('opacity-100', 'translate-y-0');
+        container.classList.add('opacity-0', 'translate-y-2');
+      }, 2000);
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // SETTINGS MODAL & TABS
+    // -------------------------------------------------------------------------------------------
+    function toggleSettingsModal(show) {
+      const modal = document.getElementById('settings-modal');
+      if (show) {
+        modal.classList.remove('hidden');
+      } else {
+        modal.classList.add('hidden');
+      }
+    }
+
+    function switchSettingsTab(tabKey) {
+      const tabs = ['general', 'pronunciation', 'display', 'model', 'privacy'];
+      tabs.forEach(t => {
+        const btn = document.getElementById('set-tab-' + t);
+        const content = document.getElementById('settings-content-' + t);
+        if (t === tabKey) {
+          btn.classList.add('bg-blue-600', 'text-white');
+          btn.classList.remove('text-[var(--mac-text-secondary)]');
+          content.classList.remove('hidden');
+        } else {
+          btn.classList.remove('bg-blue-600', 'text-white');
+          btn.classList.add('text-[var(--mac-text-secondary)]');
+          content.classList.add('hidden');
+        }
+      });
+    }
+
+    function toggleSettingsSwitch(elem) {
+      elem.classList.toggle('active');
+    }
+
+    function clearAllCache() {
+      if (confirm('确定要清空本地所有翻译和语法缓存记录吗？')) {
+        showToast('已清空本地 SQLite 缓存');
+      }
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // MENU BAR & ACCESSIBILITY PERMISSIONS
+    // -------------------------------------------------------------------------------------------
+    function toggleStyleMenu() {
+      const menu = document.getElementById('style-dropdown');
+      menu.classList.toggle('hidden');
+    }
+
+    function toggleMenuBarMenu() {
+      const menu = document.getElementById('menubar-dropdown');
+      menu.classList.toggle('hidden');
+    }
+
+    function triggerTranslateFromClipboard() {
+      showToast('已从剪贴板读取并触发快速翻译');
+      switchScenario('sentence_simple');
+    }
+
+    function togglePermissionModal(show) {
+      const modal = document.getElementById('permission-modal');
+      if (show) modal.classList.remove('hidden');
+      else modal.classList.add('hidden');
+    }
+
+    function simulateGrantPermission() {
+      togglePermissionModal(false);
+      showToast('已成功开启系统辅助功能权限！');
+      switchScenario('word_arch');
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // DESKTOP CONTEXT / INSPECTOR SWITCHER
+    // -------------------------------------------------------------------------------------------
+    let isDesktopContext = true;
+    function toggleDesktopContext() {
+      isDesktopContext = !isDesktopContext;
+      const mockup = document.getElementById('desktop-app-mockup');
+      const cursor = document.getElementById('simulated-cursor');
+      const label = document.getElementById('context-label');
+
+      if (isDesktopContext) {
+        mockup.classList.remove('opacity-20');
+        cursor.classList.remove('hidden');
+        label.innerText = '桌面工作流视图';
+      } else {
+        cursor.classList.add('hidden');
+        label.innerText = '纯净检视模式';
+      }
+      showToast('已切换为: ' + label.innerText);
+    }
+
+    function toggleSpecDrawer(force) {
+      const drawer = document.getElementById('spec-drawer');
+      if (force !== undefined) {
+        if (force) drawer.classList.remove('translate-x-full');
+        else drawer.classList.add('translate-x-full');
+      } else {
+        drawer.classList.toggle('translate-x-full');
+      }
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // MANUAL INPUT TRANSLATE SIMULATION
+    // -------------------------------------------------------------------------------------------
+    function handleManualTranslate() {
+      const input = document.getElementById('manual-input-box').value.trim();
+      if (!input) {
+        showToast('请输入翻译内容');
+        return;
+      }
+
+      showToast('正在分析并调用 LLM...');
+      setTimeout(() => {
+        // Auto-detect if English or Chinese
+        const isChinese = /[\u4e00-\u9fa5]/.test(input);
+        if (isChinese) {
+          SCENARIOS.custom = {
+            type: 'chinese',
+            sourceText: input,
+            langBadge: '中文 → English',
+            translation: 'This is the generated English translation.',
+            tone: '自然技术交流',
+            alternatives: [
+              { en: 'This is the natural expression for ' + input, desc: '日常沟通自然表达' }
+            ],
+            note: '已基于上下文结构生成地道英文表达。',
+            cacheHit: false
+          };
+        } else {
+          SCENARIOS.custom = {
+            type: 'sentence',
+            sourceText: input,
+            langBadge: 'English → 中文',
+            translation: '这是针对该英文句子的中文解析结果。',
+            skeleton: input.slice(0, 30) + '...',
+            chunks: [
+              { text: input, role: 'subject', roleName: '成分', desc: '用户自定义输入的句子内容。' }
+            ],
+            grammarPoints: [
+              { name: '动态句子分析', desc: '实时通过 LLM Fast Analyze 完成主干与成分标注。' }
+            ],
+            cacheHit: false
+          };
+        }
+        switchScenario('custom');
+      }, 500);
+    }
+
+    function retryLastAction() {
+      showToast('正在重新发起请求...');
+      setTimeout(() => {
+        switchScenario('sentence_simple');
+      }, 600);
+    }
+
+    function reTriggerCurrentSelection() {
+      showToast('快捷键 ⌥Space 已触发');
+      togglePanel(true);
+    }
+
+    function updateMockupContext(scenarioId, data) {
+      const textElem = document.getElementById('selectable-text-mock');
+      if (textElem && data.sourceText) {
+        textElem.innerText = data.sourceText.length > 25 ? data.sourceText.slice(0, 25) + '...' : data.sourceText;
+      }
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // THEME SWITCHING (macOS Light / Dark Mode)
+    // -------------------------------------------------------------------------------------------
+    function toggleTheme() {
+      const html = document.documentElement;
+      const isDark = html.classList.toggle('dark');
+      document.getElementById('theme-icon-moon').classList.toggle('hidden', isDark);
+      document.getElementById('theme-icon-sun').classList.toggle('hidden', !isDark);
+      showToast(isDark ? '已切换至 macOS 深色外观' : '已切换至 macOS 浅色外观');
+    }
+
+    // -------------------------------------------------------------------------------------------
+    // GLOBAL KEYBOARD SHORTCUTS (Apple HIG Compliant: Esc, ⌥Space, ⌘,)
+    // -------------------------------------------------------------------------------------------
+    window.addEventListener('keydown', (e) => {
+      // Option + Space (Alt + Space) => Toggle Floating Panel
+      if (e.altKey && e.code === 'Space') {
+        e.preventDefault();
+        togglePanel();
+        showToast('快捷键 ⌥Space 触发');
+        return;
+      }
+
+      // Command + , => Toggle Settings
+      if ((e.metaKey || e.ctrlKey) && e.key === ',') {
+        e.preventDefault();
+        toggleSettingsModal(true);
+        return;
+      }
+
+      // Escape key => Dismiss pinned tooltip, or settings, or panel
+      if (e.key === 'Escape') {
+        if (pinnedTooltip) {
+          unpinGrammarCard();
+          return;
+        }
+        const settingsModal = document.getElementById('settings-modal');
+        if (!settingsModal.classList.contains('hidden')) {
+          toggleSettingsModal(false);
+          return;
+        }
+        const permModal = document.getElementById('permission-modal');
+        if (!permModal.classList.contains('hidden')) {
+          togglePermissionModal(false);
+          return;
+        }
+        const menu = document.getElementById('menubar-dropdown');
+        if (!menu.classList.contains('hidden')) {
+          menu.classList.add('hidden');
+          return;
+        }
+        // If not pinned, close panel
+        if (!isPanelPinned && isPanelOpen) {
+          togglePanel(false);
+          showToast('浮窗已关闭 (按 ⌥Space 重新打开)');
+        }
+      }
+    });
+
+    // Close menu bar menu when clicking outside
+    window.addEventListener('click', (e) => {
+      const menu = document.getElementById('menubar-dropdown');
+      const btn = document.getElementById('menubar-icon-btn');
+      if (menu && !menu.contains(e.target) && !btn.contains(e.target)) {
+        menu.classList.add('hidden');
+      }
+    });
+
+    // Initialize Default State
+    document.addEventListener('DOMContentLoaded', () => {
+      // Default to dark mode for authentic macOS Pro developer look
+      document.documentElement.classList.add('dark');
+      switchScenario('word_arch');
+
+      // Real clock update
+      function updateClock() {
+        const d = new Date();
+        const h = String(d.getHours()).padStart(2, '0');
+        const m = String(d.getMinutes()).padStart(2, '0');
+        document.getElementById('mac-clock').innerText = `${h}:${m}`;
+      }
+      setInterval(updateClock, 10000);
+      updateClock();
+    });
+  </script>
+</body>
+</html>

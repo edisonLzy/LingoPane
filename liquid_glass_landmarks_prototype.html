@@ -1,0 +1,959 @@
+<!DOCTYPE html>
+<html lang="zh-CN" class="dark">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Landmarks · Apple 官方 Liquid Glass 交互原型与 AI 翻译面板</title>
+  <!-- Tailwind CSS CDN -->
+  <script src="https://www.gstatic.com/antigravity/web/dev/tailwindcss.min.js"></script>
+  <script src="image_assets.js"></script>
+  <style>
+    :root {
+      --font-system: -apple-system, BlinkMacSystemFont, "SF Pro Text", "SF Pro Display", "Helvetica Neue", sans-serif;
+      --font-mono: "SF Mono", Menlo, Monaco, Consolas, monospace;
+
+      /* Liquid Glass Dark Mode Tokens (Official Apple HIG 26.0) */
+      --liquid-bg: #07090E;
+      --liquid-surface: rgba(16, 20, 30, 0.65);
+      --liquid-surface-hover: rgba(26, 32, 48, 0.75);
+      --liquid-card: rgba(255, 255, 255, 0.08);
+      --liquid-pill: rgba(255, 255, 255, 0.14);
+      --liquid-pill-hover: rgba(255, 255, 255, 0.24);
+      --liquid-border: rgba(255, 255, 255, 0.18);
+      --liquid-border-subtle: rgba(255, 255, 255, 0.09);
+      --liquid-specular-top: inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.38);
+      --liquid-specular-bottom: inset 0 -1px 1px 0 rgba(0, 0, 0, 0.65);
+      --liquid-shadow: 0 30px 80px -15px rgba(0, 0, 0, 0.85), 0 0 0 1px rgba(255, 255, 255, 0.12);
+      
+      --text-main: #FFFFFF;
+      --text-secondary: #98A2B3;
+      --text-tertiary: #667085;
+      --accent: #2997FF;
+
+      /* Grammar Highlight Colors (HIG compliant) */
+      --color-sub: #2997FF;     /* 蓝色：主语 */
+      --color-pred: #FF9F0A;    /* 橙色：谓语 */
+      --color-obj: #30D158;     /* 绿色：宾语/表语 */
+      --color-adv: #8E8E93;     /* 灰色：状语 */
+      --color-clause: #BF5AF2;  /* 紫色：从句 */
+    }
+
+    html.light {
+      --liquid-bg: #F2F5F9;
+      --liquid-surface: rgba(255, 255, 255, 0.72);
+      --liquid-surface-hover: rgba(255, 255, 255, 0.85);
+      --liquid-card: rgba(255, 255, 255, 0.6);
+      --liquid-pill: rgba(255, 255, 255, 0.55);
+      --liquid-pill-hover: rgba(255, 255, 255, 0.78);
+      --liquid-border: rgba(255, 255, 255, 0.85);
+      --liquid-border-subtle: rgba(0, 0, 0, 0.08);
+      --liquid-specular-top: inset 0 1.5px 1px 0 rgba(255, 255, 255, 0.95);
+      --liquid-specular-bottom: inset 0 -1px 1px 0 rgba(0, 0, 0, 0.08);
+      --liquid-shadow: 0 25px 65px -12px rgba(18, 38, 75, 0.2), 0 0 0 1px rgba(255, 255, 255, 0.75);
+
+      --text-main: #1D1D1F;
+      --text-secondary: #51535A;
+      --text-tertiary: #86868B;
+      --accent: #0071E3;
+    }
+
+    body {
+      font-family: var(--font-system);
+      background-color: var(--liquid-bg);
+      color: var(--text-main);
+      -webkit-font-smoothing: antialiased;
+      overflow-x: hidden;
+    }
+
+    /* Core Apple Liquid Glass Shader */
+    .liquid-glass {
+      background: var(--liquid-surface);
+      backdrop-filter: blur(48px) saturate(210%);
+      -webkit-backdrop-filter: blur(48px) saturate(210%);
+      border: 1px solid var(--liquid-border);
+      box-shadow: var(--liquid-shadow), var(--liquid-specular-top), var(--liquid-specular-bottom);
+    }
+
+    /* Floating Pill Button (.buttonStyle(.glass)) */
+    .liquid-pill-btn {
+      background: var(--liquid-pill);
+      backdrop-filter: blur(24px) saturate(180%);
+      -webkit-backdrop-filter: blur(24px) saturate(180%);
+      border: 1px solid var(--liquid-border);
+      box-shadow: inset 0 1px 0.8px rgba(255, 255, 255, 0.35), 0 3px 10px rgba(0, 0, 0, 0.15);
+      border-radius: 9999px;
+      transition: all 0.22s cubic-bezier(0.16, 1, 0.3, 1);
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      cursor: pointer;
+      user-select: none;
+    }
+    .liquid-pill-btn:hover {
+      background: var(--liquid-pill-hover);
+      box-shadow: inset 0 1.2px 1.2px rgba(255, 255, 255, 0.6), 0 6px 18px rgba(0, 0, 0, 0.25);
+      transform: translateY(-0.5px) scale(1.02);
+    }
+    .liquid-pill-btn:active {
+      transform: translateY(0.5px) scale(0.97);
+    }
+
+    /* Grouped Toolbar Container */
+    .liquid-grouped-toolbar {
+      background: var(--liquid-pill);
+      backdrop-filter: blur(32px) saturate(200%);
+      -webkit-backdrop-filter: blur(32px) saturate(200%);
+      border: 1px solid var(--liquid-border);
+      box-shadow: inset 0 1.2px 1px rgba(255, 255, 255, 0.35), 0 8px 24px -4px rgba(0, 0, 0, 0.25);
+      border-radius: 9999px;
+      padding: 4px 6px;
+      display: inline-flex;
+      align-items: center;
+      gap: 3px;
+    }
+
+    /* Concentric Hardware Curvature Inner Card */
+    .concentric-glass-card {
+      background: var(--liquid-card);
+      backdrop-filter: blur(20px);
+      -webkit-backdrop-filter: blur(20px);
+      border: 1px solid var(--liquid-border-subtle);
+      border-radius: 16px;
+      box-shadow: inset 0 1px 0.5px rgba(255, 255, 255, 0.15), 0 2px 8px rgba(0,0,0,0.06);
+    }
+
+    /* Background Extension Effect Mirror Container */
+    .bg-extension-underlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      width: 252px;
+      height: 368px;
+      overflow: hidden;
+      z-index: 1;
+      pointer-events: none;
+    }
+    .bg-extension-mirror {
+      width: 772px;
+      height: 368px;
+      transform: scaleX(-1);
+      transform-origin: left center;
+      filter: blur(32px) saturate(160%) brightness(0.65);
+      opacity: 0.85;
+      object-fit: cover;
+    }
+
+    /* Grammar Underline Annotations */
+    .syntax-part {
+      position: relative;
+      cursor: pointer;
+      display: inline;
+      padding-bottom: 2px;
+      transition: background-color 0.15s ease;
+      border-radius: 2px;
+    }
+    .syntax-part:hover {
+      background-color: rgba(255, 255, 255, 0.12);
+    }
+    .syntax-sub { border-bottom: 2.5px solid var(--color-sub); }
+    .syntax-pred { border-bottom: 2.5px solid var(--color-pred); }
+    .syntax-obj { border-bottom: 2.5px solid var(--color-obj); }
+    .syntax-adv { border-bottom: 2px solid var(--color-adv); }
+    .syntax-clause { border-bottom: 2.5px solid var(--color-clause); }
+
+    /* Syntax Component Tooltip */
+    .syntax-tooltip {
+      position: absolute;
+      bottom: calc(100% + 6px);
+      left: 50%;
+      transform: translateX(-50%) translateY(4px);
+      background: rgba(20, 25, 36, 0.92);
+      backdrop-filter: blur(16px);
+      -webkit-backdrop-filter: blur(16px);
+      border: 1px solid rgba(255, 255, 255, 0.2);
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.4);
+      color: #FFFFFF;
+      padding: 3px 8px;
+      border-radius: 6px;
+      font-size: 11px;
+      font-weight: 600;
+      white-space: nowrap;
+      pointer-events: none;
+      opacity: 0;
+      transition: all 0.18s cubic-bezier(0.16, 1, 0.3, 1);
+      z-index: 60;
+    }
+    .syntax-part:hover .syntax-tooltip {
+      opacity: 1;
+      transform: translateX(-50%) translateY(0);
+    }
+
+    /* Custom Apple-Style Thin Scrollbar */
+    ::-webkit-scrollbar { width: 5px; height: 5px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.2); border-radius: 9999px; }
+    html.light ::-webkit-scrollbar-thumb { background: rgba(0, 0, 0, 0.2); }
+
+    /* Speaker Wave Pulse */
+    @keyframes wavePulse {
+      0%, 100% { height: 4px; }
+      50% { height: 14px; }
+    }
+    .wave-playing .wave-1 { animation: wavePulse 0.6s infinite ease-in-out; }
+    .wave-playing .wave-2 { animation: wavePulse 0.5s infinite 0.15s ease-in-out; }
+    .wave-playing .wave-3 { animation: wavePulse 0.7s infinite 0.3s ease-in-out; }
+  </style>
+</head>
+<body class="min-h-screen bg-black text-white selection:bg-blue-500/30">
+
+  <!-- ==================== TOP NAVIGATION CONTROLLER ==================== -->
+  <header class="sticky top-0 z-40 w-full px-5 py-2.5 bg-black/75 backdrop-blur-xl border-b border-white/10 flex flex-wrap items-center justify-between gap-3 text-xs">
+    <div class="flex items-center gap-3">
+      <div class="flex items-center gap-1.5 font-semibold text-white tracking-tight">
+        <svg class="w-4 h-4 text-blue-400" viewBox="0 0 24 24" fill="currentColor"><path d="M18.71 19.5c-.83 1.24-1.71 2.45-3.05 2.47-1.34.03-1.77-.79-3.29-.79-1.53 0-2 .77-3.27.82-1.31.05-2.3-1.32-3.14-2.53C4.25 17 2.94 12.45 4.7 9.39c.87-1.52 2.43-2.48 4.12-2.51 1.28-.02 2.5.87 3.29.87.78 0 2.26-1.07 3.81-.91.65.03 2.47.26 3.64 1.98-.09.06-2.17 1.28-2.15 3.81.03 3.02 2.65 4.03 2.68 4.04-.03.07-.42 1.44-1.38 2.83M15.97 4.16c.61-.75 1.04-1.8 0.92-2.85-.92.04-2.02.62-2.67 1.37-.58.67-.99 1.74-.86 2.76 1.02.08 2-.54 2.61-1.28z"/></svg>
+        <span>Landmarks</span>
+        <span class="px-2 py-0.5 rounded-full text-[10px] font-medium bg-blue-500/20 text-blue-300 border border-blue-400/30 ml-1">
+          Apple Liquid Glass
+        </span>
+      </div>
+
+      <span class="text-white/20">|</span>
+
+      <!-- Quick Test Chips for User Verification -->
+      <div class="flex items-center gap-1.5">
+        <span class="text-white/50 text-[11px]">快速验证新规面板:</span>
+        <button onclick="testShowWord()" class="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white transition flex items-center gap-1">
+          <span>📖 1. 英语单词面板</span>
+        </button>
+        <button onclick="testShowSentence()" class="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white transition flex items-center gap-1">
+          <span>🔍 2. 英语句子面板</span>
+        </button>
+        <button onclick="testShowChinese()" class="px-2.5 py-1 rounded-md bg-white/10 hover:bg-white/20 text-white transition flex items-center gap-1">
+          <span>🇨🇳 3. 中文词句面板</span>
+        </button>
+      </div>
+    </div>
+
+    <!-- Right Controls -->
+    <div class="flex items-center gap-3">
+      <!-- Appearance Switcher -->
+      <button onclick="toggleAppearance()" class="p-1.5 rounded-md bg-white/10 hover:bg-white/20 border border-white/10 text-gray-200 transition" title="切换深色/浅色外观">
+        <svg id="iconSun" class="w-3.5 h-3.5 hidden" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="5"/><path d="M12 1v2M12 21v2M4.22 4.22l1.42 1.42M18.36 18.36l1.42 1.42M1 12h2M21 12h2M4.22 19.78l1.42-1.42M18.36 5.64l1.42-1.42"/></svg>
+        <svg id="iconMoon" class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z"/></svg>
+      </button>
+
+      <!-- Viewport Frame Toggle -->
+      <button onclick="toggleDeviceFrame()" id="btnFrame" class="px-2.5 py-1 rounded-md bg-blue-600/80 hover:bg-blue-600 border border-blue-400/40 text-white transition flex items-center gap-1.5">
+        <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg>
+        <span>iPad 1024×768 视口</span>
+      </button>
+    </div>
+  </header>
+
+
+  <!-- ==================== MAIN VIEW CONTAINER ==================== -->
+  <main class="w-full flex items-center justify-center p-0 md:p-6 transition-all duration-300">
+
+    <!-- IPAD / MACOS HARDWARE VIEWPORT -->
+    <div id="appViewport" class="relative w-full max-w-[1024px] h-[768px] bg-black rounded-[32px] overflow-hidden shadow-2xl border border-white/20 flex flex-col transition-all duration-300 select-none">
+
+      <!-- System Status Bar -->
+      <div class="absolute top-0 left-0 right-0 h-8 z-30 px-6 flex items-center justify-between text-xs font-medium text-white/90 pointer-events-none">
+        <div><span>9:41 Mon, Jun 9</span></div>
+        <div class="flex items-center gap-2.5">
+          <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M2 17h3v4H2v-4zm6-5h3v9H8v-9zm6-5h3v14h-3V7zm6-5h3v19h-3V2z"/></svg>
+          <svg class="w-3.5 h-3.5 fill-current" viewBox="0 0 24 24"><path d="M12 4C7.31 4 3.07 5.9 0 8.98L12 21 24 8.98C20.93 5.9 16.69 4 12 4zm0 3.5c3.6 0 6.9 1.3 9.4 3.5L12 18.2 2.6 11c2.5-2.2 5.8-3.5 9.4-3.5z"/></svg>
+          <div class="flex items-center gap-1">
+            <span>100%</span>
+            <div class="w-5 h-2.5 border border-white/80 rounded-[4px] p-0.5 flex items-center">
+              <div class="w-full h-full bg-white rounded-[1.5px]"></div>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- ==================== SPLIT VIEW ==================== -->
+      <div class="relative w-full h-full flex overflow-hidden">
+
+        <!-- Background Extension Effect Underlay -->
+        <div id="bgExtensionUnderlay" class="bg-extension-underlay">
+          <img id="bgExtensionImg" src="fuji_hero.jpg" class="bg-extension-mirror" alt="Mirror Extension">
+        </div>
+
+        <!-- Liquid Glass Floating Sidebar -->
+        <aside id="sidebar" class="relative z-20 w-[252px] h-full flex flex-col pt-9 pb-6 px-4 liquid-glass border-r border-white/15 transition-all duration-300 ease-out">
+          <div class="flex items-center justify-between mb-6 px-1">
+            <span class="text-sm font-semibold tracking-tight text-white/90">Landmarks</span>
+            <button onclick="toggleSidebar()" class="p-1.5 rounded-lg text-white/70 hover:text-white hover:bg-white/10 transition" title="收起/展开侧栏">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="3" width="18" height="18" rx="4"/><path d="M9 3v18"/></svg>
+            </button>
+          </div>
+
+          <!-- Navigation Items -->
+          <nav class="flex-1 space-y-1.5 text-sm font-medium">
+            <a href="javascript:void(0)" class="flex items-center gap-3 px-3 py-2 rounded-xl bg-white/20 text-white font-medium shadow-sm border border-white/20 backdrop-blur-md">
+              <svg class="w-4 h-4 text-white" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 21h18M3 10h18M5 10v11M9 10v11M15 10v11M19 10v11M12 3l9 7H3z"/></svg>
+              <span>Landmarks</span>
+            </a>
+            <a href="javascript:void(0)" onclick="showToast('高精度 3D 卫星地形已就绪')" class="flex items-center gap-3 px-3 py-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition">
+              <svg class="w-4 h-4 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="1 6 1 22 8 18 16 22 23 18 23 2 16 6 8 2 1 6"/><line x1="8" y1="2" x2="8" y2="18"/><line x1="16" y1="6" x2="16" y2="22"/></svg>
+              <span>Map</span>
+            </a>
+            <a href="javascript:void(0)" onclick="showToast('已收藏 12 个日本世界遗产')" class="flex items-center gap-3 px-3 py-2 rounded-xl text-white/70 hover:text-white hover:bg-white/10 transition">
+              <svg class="w-4 h-4 text-white/70" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20M4 4.5A2.5 2.5 0 0 1 6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5z"/></svg>
+              <span>Collections</span>
+            </a>
+          </nav>
+
+          <div class="mt-auto px-2 pt-4 border-t border-white/10 flex items-center justify-between text-[11px] text-white/50">
+            <span>Honshu, Japan</span>
+            <span class="font-mono">3,776 m</span>
+          </div>
+        </aside>
+
+        <!-- Main Detail Scrollable Content -->
+        <div id="mainContentScroll" class="relative z-10 flex-1 h-full overflow-y-auto overflow-x-hidden flex flex-col bg-black">
+          
+          <!-- Hero Photo Container -->
+          <div class="relative w-full h-[368px] flex-shrink-0">
+            <img id="heroImg" src="fuji_hero.jpg" class="w-full h-full object-cover object-center" alt="Mount Fuji and Cherry Blossoms">
+            <div class="absolute inset-x-0 bottom-0 h-16 bg-gradient-to-t from-black via-black/40 to-transparent"></div>
+
+            <!-- Floating Liquid Glass Toolbars -->
+            <div class="absolute top-10 inset-x-6 z-20 flex items-center justify-between pointer-events-none">
+              <!-- Left: Back Button -->
+              <button onclick="toggleSidebar()" class="pointer-events-auto liquid-pill-btn w-9 h-9 text-white/90 shadow-lg" title="返回 / 侧栏">
+                <svg class="w-4 h-4 -ml-0.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M15 18l-6-6 6-6"/></svg>
+              </button>
+
+              <!-- Right: Grouped Pills -->
+              <div class="pointer-events-auto flex items-center gap-3">
+                <div class="liquid-grouped-toolbar">
+                  <!-- Share -->
+                  <button onclick="showToast('已复制地标链接')" class="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 transition">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 12v8a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2v-8M16 6l-4-4-4 4M12 2v13"/></svg>
+                  </button>
+                  <!-- Heart -->
+                  <button id="btnFavorite" onclick="toggleFavorite()" class="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-rose-400 hover:bg-white/15 transition">
+                    <svg id="iconHeartOutline" class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z"/></svg>
+                    <svg id="iconHeartFilled" class="w-4 h-4 text-rose-500 fill-current hidden" viewBox="0 0 24 24"><path d="M12 21.35l-1.45-1.32C5.4 15.36 2 12.28 2 8.5 2 5.42 4.42 3 7.5 3c1.74 0 3.41.81 4.5 2.09C13.09 3.81 14.76 3 16.5 3 19.58 3 22 5.42 22 8.5c0 3.78-3.4 6.86-8.55 11.54L12 21.35z"/></svg>
+                  </button>
+                  <!-- Bookmark -->
+                  <button onclick="showToast('已加入合集')" class="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 transition">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M19 21l-7-5-7 5V5a2 2 0 0 1 2-2h10a2 2 0 0 1 2 2z"/></svg>
+                  </button>
+                  <!-- Info -->
+                  <button onclick="toggleInspector()" class="w-8 h-8 rounded-full flex items-center justify-center text-white/80 hover:text-white hover:bg-white/15 transition">
+                    <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 16v-4M12 8h.01"/></svg>
+                  </button>
+                </div>
+
+                <!-- Search Pill -->
+                <div class="liquid-pill-btn px-3 py-1.5 flex items-center gap-2 text-white/80">
+                  <svg class="w-3.5 h-3.5 text-white/60" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><circle cx="11" cy="11" r="8"/><path d="M21 21l-4.35-4.35"/></svg>
+                  <input type="text" placeholder="Search" oninput="handleSearch(this.value)" class="bg-transparent text-xs text-white placeholder-white/50 focus:outline-none w-16 focus:w-28 transition-all">
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- Article Text (Selectable & Clickable for In-situ Translation) -->
+          <article class="relative z-10 px-8 pt-4 pb-20 max-w-3xl">
+            <h1 class="text-3xl font-bold tracking-tight text-white mb-4">Mount Fuji</h1>
+
+            <!-- Paragraph 1 -->
+            <p class="text-[15px] leading-[1.75] text-white/90 mb-6 font-normal">
+              When seen at a distance, Mount Fuji presents a beautiful, nearly 
+              <span onclick="triggerWord('symmetric')" class="text-blue-300 hover:text-blue-200 underline decoration-blue-400/50 decoration-1 underline-offset-4 cursor-pointer" title="点击查单词：symmetric">symmetric</span>, 
+              often snow-capped profile and is Japan’s tallest and most iconic mountain. 
+              <span onclick="triggerSentence('cone_sentence')" class="hover:bg-white/10 rounded px-1 transition cursor-pointer" title="点击查整句成分">
+                The volcanic cone rises gracefully up to slightly more than 12,000 feet.
+              </span>
+              On clear days, the mountain is visible as far away as Tokyo. Despite its seemingly peaceful distant existence, Mount Fuji is an active 
+              <span onclick="triggerWord('volcano')" class="text-blue-300 hover:text-blue-200 underline decoration-blue-400/50 decoration-1 underline-offset-4 cursor-pointer" title="点击查单词：volcano">volcano</span>. 
+              Its last eruption was in 1707.
+            </p>
+
+            <!-- Paragraph 2 -->
+            <p class="text-[15px] leading-[1.75] text-white/80 mb-6 font-normal">
+              Similar to other exceptionally tall mountains, Fuji-san is home to many ecological zones from its base to its summit. In the lower elevations, 
+              <span onclick="triggerWord('deciduous')" class="text-blue-300 hover:text-blue-200 underline decoration-blue-400/50 decoration-1 underline-offset-4 cursor-pointer" title="点击查单词：deciduous">deciduous</span> 
+              and 
+              <span onclick="triggerWord('coniferous')" class="text-blue-300 hover:text-blue-200 underline decoration-blue-400/50 decoration-1 underline-offset-4 cursor-pointer" title="点击查单词：coniferous">coniferous</span> 
+              trees such as the Japanese oak and cedars are common. As you climb in elevation, the climate becomes harsher and plant life transitions to alpine plants and shrubs that have adapted to colder temperatures. At the highest altitudes, a volcanic desert environment exists.
+            </p>
+
+            <!-- Paragraph 3 -->
+            <p class="text-[15px] leading-[1.75] text-white/80 mb-8 font-normal">
+              Many mammals and birds are found in the forests on Mount Fuji. Black bears live there, although squirrels and fox are more likely to be seen. 
+              <span onclick="triggerSentence('serow_sentence')" class="hover:bg-white/10 rounded px-1 transition cursor-pointer" title="点击查整句成分">
+                The Japanese serow is a rare and protected species of goat-antelope that roams secretively through dense forests.
+              </span>
+              High altitude birds such as the Iwahibari and Hoshigarasu are found above 8,200 feet, while several species of warblers, flycatchers, and Ural and scops owls live in lower altitudes.
+            </p>
+          </article>
+        </div>
+
+      </div>
+
+      <!-- ==================== PURE LIQUID GLASS TRANSLATION PANEL ==================== -->
+      <!-- Strictly presents ONLY the required fields with zero clutter/shortcuts -->
+      <div id="translationPanel" class="absolute z-50 top-16 right-8 w-[380px] liquid-glass rounded-[22px] p-4 shadow-2xl transition-all duration-300 ease-out hidden select-text">
+        <!-- Minimal Header: Mode Indicator & Close Only -->
+        <div class="flex items-center justify-between pb-2.5 mb-3 border-b border-white/10 select-none">
+          <div class="flex items-center gap-2">
+            <span id="panelHeaderDot" class="w-2 h-2 rounded-full bg-blue-400"></span>
+            <span id="panelHeaderTitle" class="text-xs font-semibold text-white tracking-tight">AI 翻译</span>
+          </div>
+          <button onclick="closePanel()" class="p-1 rounded-full text-white/50 hover:text-white transition">
+            <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M18 6L6 18M6 6l12 12"/></svg>
+          </button>
+        </div>
+
+        <!-- DYNAMIC PANEL BODY: Word / Sentence / Chinese -->
+        <div id="panelBody" class="space-y-3">
+          <!-- Rendered via JS -->
+        </div>
+      </div>
+
+    </div>
+  </main>
+
+  <!-- Global Toast Feedback -->
+  <div id="toast" class="fixed bottom-8 left-1/2 -translate-x-1/2 z-50 px-4 py-2 rounded-full liquid-glass text-xs text-white shadow-2xl transition-all duration-300 opacity-0 pointer-events-none">
+    提示
+  </div>
+
+
+  <!-- ==================== CORE JAVASCRIPT ==================== -->
+  <script>
+    // State
+    let isSidebarOpen = true;
+    let isLightMode = false;
+    let isDeviceConstrained = true;
+    let isFavorite = false;
+
+    // Database of Word & Sentence Samples
+    const wordDatabase = {
+      symmetric: {
+        word: "symmetric",
+        phonetic: "/sɪˈmet.rɪk/",
+        root: "sym- (共同/对应) + metr (测量/尺度) + -ic (形容词后缀) → 尺度对称的",
+        meanings: [
+          { pos: "adj.", def: "对称的；匀称的；两边大小形状完全一致的" },
+          { pos: "n.", def: "(数/物) 对称图形；对称结构" }
+        ],
+        synonyms: ["balanced", "proportional", "harmonious", "evenly shaped"],
+        examples: [
+          { en: "Mount Fuji presents a beautiful, nearly symmetric profile.", cn: "从远处看，富士山呈现出优美、近乎对称的轮廓。" },
+          { en: "The architectural design features perfectly symmetric arches.", cn: "该建筑设计采用了完美对称的拱门结构。" }
+        ]
+      },
+      volcano: {
+        word: "volcano",
+        phonetic: "/vɒlˈkeɪ.nəʊ/",
+        root: "源自罗马神话火神 Vulcan (伏尔甘) → 喷火之山",
+        meanings: [
+          { pos: "n.", def: "火山；(比喻) 随时可能爆发的危险局面" }
+        ],
+        synonyms: ["active volcano", "caldera", "crater"],
+        examples: [
+          { en: "Despite its peaceful appearance, Mount Fuji is an active volcano.", cn: "尽管外表显得静谧，但富士山实质上是一座活火山。" },
+          { en: "The volcano has remained dormant since its last eruption in 1707.", cn: "自 1707 年最后一次喷发以来，这座火山一直处于休眠状态。" }
+        ]
+      },
+      deciduous: {
+        word: "deciduous",
+        phonetic: "/dɪˈsɪdʒ.u.əs/",
+        root: "de- (向下) + cadere (掉落) + -ous → 每年按时落叶的",
+        meanings: [
+          { pos: "adj.", def: "(植物树木) 落叶性的；(动物牙齿/角) 每年脱落的" }
+        ],
+        synonyms: ["broad-leaved", "non-evergreen"],
+        examples: [
+          { en: "Deciduous trees shed their leaves each autumn.", cn: "落叶乔木在每年秋季褪去叶片。" }
+        ]
+      },
+      coniferous: {
+        word: "coniferous",
+        phonetic: "/kəˈnɪf.ər.əs/",
+        root: "cone (松果/圆锥) + fer (结出/承载) + -ous → 结松果的",
+        meanings: [
+          { pos: "adj.", def: "针叶的；结松果的" }
+        ],
+        synonyms: ["evergreen", "pine-bearing"],
+        examples: [
+          { en: "Coniferous forests thrive in colder alpine altitudes.", cn: "针叶林在高寒的高山海拔地带繁茂生长。" }
+        ]
+      }
+    };
+
+    const sentenceDatabase = {
+      cone_sentence: {
+        raw: "The volcanic cone rises gracefully up to slightly more than 12,000 feet.",
+        translation: "这座火山锥体拔地而起，优美地攀升至略高于 12,000 英尺的高空。",
+        // 3.1.1 句子成分需要在原句中以不同颜色的下划线标注，hover下划线展示具体成分名称
+        annotated: `
+          <span class="syntax-part syntax-sub">The volcanic cone<span class="syntax-tooltip">主语 (Subject)</span></span> 
+          <span class="syntax-part syntax-pred">rises<span class="syntax-tooltip">谓语 (Predicate)</span></span> 
+          <span class="syntax-part syntax-adv">gracefully<span class="syntax-tooltip">状语 (Adverbial)</span></span> 
+          <span class="syntax-part syntax-adv">up to slightly more than 12,000 feet<span class="syntax-tooltip">程度状语 (Degree Adverbial)</span></span>.
+        `,
+        audioText: "The volcanic cone rises gracefully up to slightly more than 12,000 feet.",
+        keyWords: [
+          { w: "volcanic", p: "adj.", d: "火山的；火山作用引起的" },
+          { w: "gracefully", p: "adv.", d: "优美地；端庄自然地" }
+        ],
+        keyPhrases: [
+          { p: "up to", d: "达到；攀升至（数量/高度）" },
+          { p: "more than", d: "超过；略多于..." }
+        ]
+      },
+      serow_sentence: {
+        raw: "The Japanese serow is a rare and protected species of goat-antelope that roams secretively through dense forests.",
+        translation: "日本鬣羚是一种稀有且受保护的羊羚物种，它们隐秘地漫步于茂密的森林深处。",
+        annotated: `
+          <span class="syntax-part syntax-sub">The Japanese serow<span class="syntax-tooltip">主语 (Subject)</span></span> 
+          <span class="syntax-part syntax-pred">is<span class="syntax-tooltip">谓语 (Predicate)</span></span> 
+          <span class="syntax-part syntax-obj">a rare and protected species of goat-antelope<span class="syntax-tooltip">表语/宾语 (Predicative)</span></span> 
+          <span class="syntax-part syntax-clause">that roams secretively through dense forests<span class="syntax-tooltip">定语从句 (Relative Clause)</span></span>.
+        `,
+        audioText: "The Japanese serow is a rare and protected species of goat-antelope that roams secretively through dense forests.",
+        keyWords: [
+          { w: "serow", p: "n.", d: "鬣羚；羊羚（稀有高山野生动物）" },
+          { w: "secretively", p: "adv.", d: "隐秘地；悄无声息地" }
+        ],
+        keyPhrases: [
+          { p: "roams through", d: "漫步穿梭于..." },
+          { p: "protected species", d: "受法律保护的物种" }
+        ]
+      }
+    };
+
+    const chineseSamples = {
+      fallback: {
+        input: "这个方案可以先作为一个兜底方案。",
+        translations: [
+          {
+            text: "We can use this as a fallback for now.",
+            tag: "自然日常沟通"
+          },
+          {
+            text: "This can serve as a fallback solution in the interim.",
+            tag: "正式书面设计"
+          }
+        ]
+      },
+      fuji: {
+        input: "富士山是日本最著名的活火山。",
+        translations: [
+          {
+            text: "Mount Fuji is the most famous active volcano in Japan.",
+            tag: "标准地道"
+          },
+          {
+            text: "Fuji stands as Japan’s most renowned active stratovolcano.",
+            tag: "学术地理"
+          }
+        ]
+      }
+    };
+
+    // Auto-detect Language & Render
+    function autoDetectAndRender(input) {
+      const text = input.trim();
+      const isChinese = /[\u4e00-\u9fa5]/.test(text);
+
+      if (isChinese) {
+        // 4. 中文词语/句子面板
+        renderChinesePanel(text);
+      } else {
+        const words = text.split(/\s+/);
+        if (words.length <= 2 && !text.includes('.')) {
+          // 2. 英语单词面板
+          const cleanWord = words[0].toLowerCase().replace(/[^a-z]/g, '');
+          renderEnglishWordPanel(cleanWord);
+        } else {
+          // 3. 英语句子面板
+          renderEnglishSentencePanel(text);
+        }
+      }
+      showPanel();
+    }
+
+    // ==========================================
+    // 2. 英语单词面板渲染
+    // ==========================================
+    function renderEnglishWordPanel(wordKey) {
+      const data = wordDatabase[wordKey] || {
+        word: wordKey,
+        phonetic: `/${wordKey}/`,
+        root: "语源/词根正在提取中...",
+        meanings: [{ pos: "n./v.", def: "英文词汇" }],
+        synonyms: ["related terms"],
+        examples: [{ en: `Example with ${wordKey}.`, cn: `关于 ${wordKey} 的例句。` }]
+      };
+
+      document.getElementById('panelHeaderDot').className = "w-2 h-2 rounded-full bg-blue-400";
+      document.getElementById('panelHeaderTitle').textContent = "单词解析";
+
+      let meaningsHtml = data.meanings.map(m => `
+        <div class="flex items-baseline gap-2 text-xs">
+          <span class="px-1.5 py-0.5 rounded text-[10px] font-semibold bg-blue-500/20 text-blue-300 font-mono">${m.pos}</span>
+          <span class="text-white/90 leading-relaxed">${m.def}</span>
+        </div>
+      `).join('');
+
+      let synonymsHtml = data.synonyms.map(s => `
+        <span class="px-2 py-0.5 rounded-full text-[11px] bg-white/10 text-white/80">${s}</span>
+      `).join('');
+
+      let examplesHtml = data.examples.map(ex => `
+        <div class="text-xs space-y-0.5">
+          <p class="text-white/90 font-medium">${ex.en}</p>
+          <p class="text-white/50 text-[11px]">${ex.cn}</p>
+        </div>
+      `).join('');
+
+      document.getElementById('panelBody').innerHTML = `
+        <!-- 2.1 默认展示：单词、音标、发音按钮、词根、不同词性含义 -->
+        <div class="concentric-glass-card p-3.5 space-y-2.5">
+          <div class="flex items-center justify-between">
+            <div>
+              <h3 class="text-lg font-bold text-white tracking-tight">${data.word}</h3>
+              <span class="text-xs font-mono text-white/50">${data.phonetic}</span>
+            </div>
+            <!-- 发音按钮 -->
+            <button onclick="playAudio('${data.word}')" class="liquid-pill-btn w-8 h-8 text-blue-300 hover:text-white" title="播放发音">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            </button>
+          </div>
+
+          <!-- 词根 -->
+          <div class="text-[11px] text-white/60 bg-white/5 p-2 rounded-lg border border-white/5">
+            <span class="font-semibold text-blue-300">词根：</span>${data.root}
+          </div>
+
+          <!-- 不同词性下的含义 -->
+          <div class="space-y-1.5 pt-1">
+            ${meaningsHtml}
+          </div>
+        </div>
+
+        <!-- 2.2 可展开：同义词、例句 -->
+        <div class="concentric-glass-card p-3">
+          <button onclick="toggleExpand('wordExpandable')" class="w-full flex items-center justify-between text-xs text-white/70 hover:text-white transition">
+            <span class="font-medium">同义词与例句</span>
+            <svg id="wordExpandChevron" class="w-3.5 h-3.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+
+          <div id="wordExpandable" class="hidden pt-3 mt-2 border-t border-white/10 space-y-3">
+            <!-- 同义词 -->
+            <div>
+              <span class="text-[10px] font-semibold text-white/40 block mb-1.5">同义词辨析</span>
+              <div class="flex flex-wrap gap-1.5">
+                ${synonymsHtml}
+              </div>
+            </div>
+
+            <!-- 例句 -->
+            <div>
+              <span class="text-[10px] font-semibold text-white/40 block mb-1.5">语境例句</span>
+              <div class="space-y-2">
+                ${examplesHtml}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ==========================================
+    // 3. 英语句子面板渲染
+    // ==========================================
+    function renderEnglishSentencePanel(sentenceKeyOrText) {
+      let data = sentenceDatabase[sentenceKeyOrText];
+      if (!data) {
+        data = sentenceDatabase['cone_sentence'];
+      }
+
+      document.getElementById('panelHeaderDot').className = "w-2 h-2 rounded-full bg-amber-400";
+      document.getElementById('panelHeaderTitle').textContent = "句法分析";
+
+      let keyWordsHtml = data.keyWords.map(kw => `
+        <div class="flex items-baseline justify-between text-xs py-1 border-b border-white/5">
+          <div class="flex items-baseline gap-1.5">
+            <span class="font-medium text-white">${kw.w}</span>
+            <span class="text-[10px] text-white/40 font-mono">${kw.p}</span>
+          </div>
+          <span class="text-white/70 text-[11px]">${kw.d}</span>
+        </div>
+      `).join('');
+
+      let keyPhrasesHtml = data.keyPhrases.map(kp => `
+        <div class="flex items-baseline justify-between text-xs py-1 border-b border-white/5">
+          <span class="font-medium text-blue-300">${kp.p}</span>
+          <span class="text-white/70 text-[11px]">${kp.d}</span>
+        </div>
+      `).join('');
+
+      document.getElementById('panelBody').innerHTML = `
+        <!-- 3.1 默认展示：原句、发音、成分彩线下划线标注与 hover 名称，以及译文 -->
+        <div class="concentric-glass-card p-3.5 space-y-3">
+          <div class="flex items-start justify-between gap-2">
+            <!-- 3.1.1 句子成分标注与 hover 提示 -->
+            <div class="text-xs leading-[2] text-white font-medium flex-1">
+              ${data.annotated}
+            </div>
+
+            <!-- 发音按钮 -->
+            <button onclick="playAudio('${data.audioText.replace(/'/g, "\\'")}')" class="liquid-pill-btn w-8 h-8 text-blue-300 hover:text-white flex-shrink-0" title="朗读原句">
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+            </button>
+          </div>
+
+          <!-- 极简语法色标指南 -->
+          <div class="flex items-center gap-3 pt-2 border-t border-white/10 text-[10px] text-white/60">
+            <span class="flex items-center gap-1"><span class="w-2 h-0.5 bg-blue-400"></span>主语</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-0.5 bg-amber-400"></span>谓语</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-0.5 bg-emerald-400"></span>宾语/表语</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-0.5 bg-gray-400"></span>状语</span>
+            <span class="flex items-center gap-1"><span class="w-2 h-0.5 bg-purple-400"></span>从句</span>
+          </div>
+
+          <!-- 句子中文译文 -->
+          <div class="pt-2.5 border-t border-white/10">
+            <p class="text-xs leading-relaxed text-white/90 font-normal">
+              ${data.translation}
+            </p>
+          </div>
+        </div>
+
+        <!-- 3.2 可展开：重点单词，重点短语 -->
+        <div class="concentric-glass-card p-3">
+          <button onclick="toggleExpand('sentenceExpandable')" class="w-full flex items-center justify-between text-xs text-white/70 hover:text-white transition">
+            <span class="font-medium">重点单词与短语</span>
+            <svg id="sentenceExpandChevron" class="w-3.5 h-3.5 transition-transform" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="6 9 12 15 18 9"/></svg>
+          </button>
+
+          <div id="sentenceExpandable" class="hidden pt-3 mt-2 border-t border-white/10 space-y-3">
+            <!-- 重点单词 -->
+            <div>
+              <span class="text-[10px] font-semibold text-white/40 block mb-1">核心词汇</span>
+              <div class="space-y-0.5">
+                ${keyWordsHtml}
+              </div>
+            </div>
+
+            <!-- 重点短语 -->
+            <div>
+              <span class="text-[10px] font-semibold text-white/40 block mb-1">关键短语搭配</span>
+              <div class="space-y-0.5">
+                ${keyPhrasesHtml}
+              </div>
+            </div>
+          </div>
+        </div>
+      `;
+    }
+
+    // ==========================================
+    // 4. 中文词语/句子面板渲染
+    // ==========================================
+    function renderChinesePanel(inputText) {
+      let data = chineseSamples.fallback;
+      if (inputText.includes("富士山")) {
+        data = chineseSamples.fuji;
+      }
+
+      document.getElementById('panelHeaderDot').className = "w-2 h-2 rounded-full bg-emerald-400";
+      document.getElementById('panelHeaderTitle').textContent = "英文翻译";
+
+      // 4.1 展示英文翻译，发音按钮，复制按钮。默认展示两句
+      let translationCardsHtml = data.translations.map((item, index) => `
+        <div class="concentric-glass-card p-3.5 space-y-2">
+          <div class="flex items-center justify-between">
+            <span class="text-[10px] font-medium text-blue-300 bg-blue-500/15 px-2 py-0.5 rounded-full border border-blue-400/20">
+              ${item.tag}
+            </span>
+            <div class="flex items-center gap-1.5">
+              <!-- 发音按钮 -->
+              <button onclick="playAudio('${item.text.replace(/'/g, "\\'")}')" class="p-1 rounded text-white/60 hover:text-white" title="发音">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/><path d="M15.54 8.46a5 5 0 0 1 0 7.07"/></svg>
+              </button>
+              <!-- 复制按钮 -->
+              <button onclick="copyText('${item.text.replace(/'/g, "\\'")}')" class="p-1 rounded text-white/60 hover:text-white" title="复制">
+                <svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="9" y="9" width="13" height="13" rx="2"/><path d="M5 15H4a2 2 0 0 1-2-2V4a2 2 0 0 1 2-2h9a2 2 0 0 1 2 2v1"/></svg>
+              </button>
+            </div>
+          </div>
+          <p class="text-xs leading-relaxed text-white font-medium">
+            ${item.text}
+          </p>
+        </div>
+      `).join('');
+
+      document.getElementById('panelBody').innerHTML = `
+        <!-- 选中的中文原文 -->
+        <div class="concentric-glass-card p-3 space-y-1">
+          <span class="text-[10px] text-white/40 font-medium block">选中的中文原文</span>
+          <p class="text-xs leading-relaxed text-white font-medium">
+            ${inputText}
+          </p>
+        </div>
+
+        <div class="space-y-2.5">
+          ${translationCardsHtml}
+        </div>
+      `;
+    }
+
+    // Expand / Collapse Handler
+    function toggleExpand(id) {
+      const el = document.getElementById(id);
+      const isHidden = el.classList.contains('hidden');
+      if (isHidden) {
+        el.classList.remove('hidden');
+      } else {
+        el.classList.add('hidden');
+      }
+      // rotate chevron
+      const chevron = document.querySelector(`#${id.replace('Expandable', 'ExpandChevron')}`);
+      if (chevron) {
+        chevron.style.transform = isHidden ? 'rotate(180deg)' : 'rotate(0deg)';
+      }
+    }
+
+    // Trigger Helpers
+    function triggerWord(w) {
+      renderEnglishWordPanel(w);
+      showPanel();
+    }
+    function triggerSentence(sKey) {
+      renderEnglishSentencePanel(sKey);
+      showPanel();
+    }
+
+    function testShowWord() {
+      triggerWord('symmetric');
+    }
+    function testShowSentence() {
+      triggerSentence('serow_sentence');
+    }
+    function testShowChinese() {
+      renderChinesePanel("这个方案可以先作为一个兜底方案。");
+      showPanel();
+    }
+
+    function showPanel() {
+      const panel = document.getElementById('translationPanel');
+      panel.classList.remove('hidden');
+      panel.style.transform = 'scale(1)';
+      panel.style.opacity = '1';
+    }
+
+    function closePanel() {
+      const panel = document.getElementById('translationPanel');
+      panel.classList.add('hidden');
+    }
+
+    // Text Selection Event for Auto-detection
+    document.addEventListener('selectionchange', () => {
+      const sel = window.getSelection();
+      const text = sel.toString().trim();
+      if (text.length > 1) {
+        autoDetectAndRender(text);
+      }
+    });
+
+    // Native Web Speech API
+    function playAudio(text) {
+      if ('speechSynthesis' in window) {
+        window.speechSynthesis.cancel();
+        const u = new SpeechSynthesisUtterance(text);
+        u.lang = 'en-US';
+        u.rate = 0.95;
+        window.speechSynthesis.speak(u);
+        showToast('🔊 正在朗读发音...');
+      }
+    }
+
+    // Copy to Clipboard
+    function copyText(text) {
+      navigator.clipboard.writeText(text).then(() => {
+        showToast('✓ 译文已复制');
+      });
+    }
+
+    // UI Toggles
+    function toggleSidebar() {
+      const sb = document.getElementById('sidebar');
+      const bg = document.getElementById('bgExtensionUnderlay');
+      isSidebarOpen = !isSidebarOpen;
+      sb.style.transform = isSidebarOpen ? 'translateX(0)' : 'translateX(-100%)';
+      bg.style.opacity = isSidebarOpen ? '0.85' : '0';
+    }
+
+    function toggleFavorite() {
+      isFavorite = !isFavorite;
+      document.getElementById('iconHeartOutline').classList.toggle('hidden', isFavorite);
+      document.getElementById('iconHeartFilled').classList.toggle('hidden', !isFavorite);
+      showToast(isFavorite ? '❤️ 已加入收藏' : '已取消收藏');
+    }
+
+    function toggleInspector() {
+      showToast('地标详情检查器');
+    }
+
+    function handleSearch(val) {
+      if (val) autoDetectAndRender(val);
+    }
+
+    function toggleAppearance() {
+      isLightMode = !isLightMode;
+      document.documentElement.classList.toggle('dark', !isLightMode);
+      document.documentElement.classList.toggle('light', isLightMode);
+      document.getElementById('iconSun').classList.toggle('hidden', !isLightMode);
+      document.getElementById('iconMoon').classList.toggle('hidden', isLightMode);
+      showToast(isLightMode ? '已切换至 Apple 浅色液态玻璃外观' : '已切换至 Apple 深色液态玻璃外观');
+    }
+
+    function toggleDeviceFrame() {
+      const vp = document.getElementById('appViewport');
+      const btn = document.getElementById('btnFrame');
+      isDeviceConstrained = !isDeviceConstrained;
+      if (isDeviceConstrained) {
+        vp.className = "relative w-full max-w-[1024px] h-[768px] bg-black rounded-[32px] overflow-hidden shadow-2xl border border-white/20 flex flex-col transition-all duration-300 select-none";
+        btn.innerHTML = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="4" y="2" width="16" height="20" rx="2"/><circle cx="12" cy="18" r="1"/></svg><span>iPad 1024×768 视口</span>`;
+      } else {
+        vp.className = "relative w-full h-[90vh] bg-black rounded-2xl overflow-hidden shadow-2xl border border-white/20 flex flex-col transition-all duration-300 select-none";
+        btn.innerHTML = `<svg class="w-3.5 h-3.5" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M8 3H5a2 2 0 0 0-2 2v3m18 0V5a2 2 0 0 0-2-2h-3m0 18h3a2 2 0 0 0 2-2v-3M3 16v3a2 2 0 0 0 2 2h3"/></svg><span>沉浸全宽视口</span>`;
+      }
+    }
+
+    let toastTimer = null;
+    function showToast(msg) {
+      const t = document.getElementById('toast');
+      t.textContent = msg;
+      t.classList.remove('opacity-0', 'pointer-events-none');
+      t.classList.add('opacity-100');
+      clearTimeout(toastTimer);
+      toastTimer = setTimeout(() => {
+        t.classList.add('opacity-0', 'pointer-events-none');
+        t.classList.remove('opacity-100');
+      }, 2000);
+    }
+
+    // Default Load: Show Word Panel as initial state
+    window.addEventListener('DOMContentLoaded', () => {
+      if (window.FUJI_HERO_B64) {
+        const heroEl = document.getElementById('heroImg');
+        const bgMirrorEl = document.getElementById('bgExtensionImg');
+        if (heroEl) heroEl.src = window.FUJI_HERO_B64;
+        if (bgMirrorEl) bgMirrorEl.src = window.FUJI_HERO_B64;
+      }
+      testShowWord();
+    });
+  </script>
+</body>
+</html>
