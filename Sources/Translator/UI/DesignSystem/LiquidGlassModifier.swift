@@ -28,7 +28,7 @@ public struct GlassBackingView: NSViewRepresentable {
     }
 }
 
-/// Apple 官方 Liquid Glass 终极材质修饰符（融合物理折射、微光渐变与深度投影）
+/// 官方 Liquid Glass 终极材质修饰符（严格还原 prototype 中 52px 模糊饱和度与微倒角高光）
 public struct LiquidGlassModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
     public var cornerRadius: CGFloat = 22
@@ -41,26 +41,42 @@ public struct LiquidGlassModifier: ViewModifier {
         content
             .background {
                 ZStack {
-                    // 1. 系统底层折射模糊
+                    // 1. 系统底层物理折射模糊 (backdrop-filter: blur(52px) saturate(210%))
                     GlassBackingView(
                         material: colorScheme == .dark ? .hudWindow : .popover,
                         blendingMode: .behindWindow
                     )
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
-                    // 2. 液体色泽薄膜
+                    // 2. 液体色泽底膜 (var(--glass-panel))
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             colorScheme == .dark
-                                ? Color(red: 12/255, green: 16/255, blue: 26/255).opacity(0.65)
-                                : Color.white.opacity(0.70)
+                                ? Color(red: 10/255, green: 12/255, blue: 20/255).opacity(0.68)
+                                : Color.white.opacity(0.55)
                         )
 
-                    // 3. 顶部物理环境光折射（Ambient Specular Sheen）
+                    // 3. 顶部物理微倒角高光（Inner Bevel: inset 0 1.5px 1.5px 0 rgba(255,255,255,0.95)）
+                    RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                        .strokeBorder(
+                            LinearGradient(
+                                stops: [
+                                    .init(color: colorScheme == .dark ? Color.white.opacity(0.70) : Color.white.opacity(0.95), location: 0.0),
+                                    .init(color: colorScheme == .dark ? Color.white.opacity(0.25) : Color.white.opacity(0.65), location: 0.15),
+                                    .init(color: colorScheme == .dark ? Color.white.opacity(0.08) : Color.white.opacity(0.30), location: 0.8),
+                                    .init(color: colorScheme == .dark ? Color.black.opacity(0.20) : Color.black.opacity(0.05), location: 1.0)
+                                ],
+                                startPoint: .top,
+                                endPoint: .bottom
+                            ),
+                            lineWidth: 1.2
+                        )
+
+                    // 4. 环境光自顶向下自然微光
                     LinearGradient(
                         stops: [
-                            .init(color: Color.white.opacity(colorScheme == .dark ? 0.12 : 0.40), location: 0.0),
-                            .init(color: Color.white.opacity(colorScheme == .dark ? 0.03 : 0.10), location: 0.25),
+                            .init(color: Color.white.opacity(colorScheme == .dark ? 0.14 : 0.45), location: 0.0),
+                            .init(color: Color.white.opacity(colorScheme == .dark ? 0.03 : 0.08), location: 0.22),
                             .init(color: Color.clear, location: 0.6)
                         ],
                         startPoint: .top,
@@ -69,47 +85,32 @@ public struct LiquidGlassModifier: ViewModifier {
                     .clipShape(RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
                 }
             }
-            .overlay {
-                // 4. 精细镜面边缘高光（Specular Rim Highlight）
-                RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
-                    .strokeBorder(
-                        LinearGradient(
-                            stops: [
-                                .init(color: colorScheme == .dark ? Color.white.opacity(0.55) : Color.white.opacity(0.95), location: 0.0),
-                                .init(color: colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.45), location: 0.2),
-                                .init(color: colorScheme == .dark ? Color.white.opacity(0.06) : Color.white.opacity(0.15), location: 0.8),
-                                .init(color: colorScheme == .dark ? Color.white.opacity(0.14) : Color.black.opacity(0.04), location: 1.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: 1.0
-                    )
-            }
             .shadow(
-                color: colorScheme == .dark ? Color.black.opacity(0.65) : Color(red: 18/255, green: 38/255, blue: 75/255).opacity(0.16),
-                radius: colorScheme == .dark ? 35 : 24,
+                color: Color.black.opacity(colorScheme == .dark ? 0.38 : 0.15),
+                radius: 32,
                 x: 0,
-                y: colorScheme == .dark ? 18 : 12
+                y: 16
             )
             .shadow(
-                color: colorScheme == .dark ? Color.black.opacity(0.40) : Color.black.opacity(0.06),
-                radius: 4,
+                color: Color.black.opacity(colorScheme == .dark ? 0.25 : 0.06),
+                radius: 8,
                 x: 0,
-                y: 1
+                y: 2
             )
     }
 }
 
-/// 同心圆角微透卡片（遵循 Apple HIG 同心曲率原则）
+/// 同心微透结果卡片（严格还原 .result-glass-card 与 .collapsible-box）
 public struct ConcentricGlassCardModifier: ViewModifier {
     @Environment(\.colorScheme) private var colorScheme
-    public var cornerRadius: CGFloat = 16
+    public var cornerRadius: CGFloat = 14
     public var isHighlighted: Bool = false
+    public var opacity: Double = 0.50
 
-    public init(cornerRadius: CGFloat = 16, isHighlighted: Bool = false) {
+    public init(cornerRadius: CGFloat = 14, isHighlighted: Bool = false, opacity: Double = 0.50) {
         self.cornerRadius = cornerRadius
         self.isHighlighted = isHighlighted
+        self.opacity = opacity
     }
 
     public func body(content: Content) -> some View {
@@ -119,16 +120,16 @@ public struct ConcentricGlassCardModifier: ViewModifier {
                     RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                         .fill(
                             colorScheme == .dark
-                                ? Color.white.opacity(isHighlighted ? 0.12 : 0.07)
-                                : Color.white.opacity(isHighlighted ? 0.75 : 0.58)
+                                ? Color.white.opacity(isHighlighted ? 0.15 : 0.08)
+                                : Color.white.opacity(isHighlighted ? 0.72 : opacity)
                         )
                         .background(.ultraThinMaterial, in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous))
 
-                    // 微光高反差边缘
+                    // 顶部微高光
                     LinearGradient(
                         stops: [
-                            .init(color: Color.white.opacity(colorScheme == .dark ? 0.08 : 0.25), location: 0.0),
-                            .init(color: Color.clear, location: 0.4)
+                            .init(color: Color.white.opacity(colorScheme == .dark ? 0.12 : 0.35), location: 0.0),
+                            .init(color: Color.clear, location: 0.35)
                         ],
                         startPoint: .top,
                         endPoint: .bottom
@@ -139,45 +140,47 @@ public struct ConcentricGlassCardModifier: ViewModifier {
             .overlay {
                 RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
                     .strokeBorder(
-                        LinearGradient(
-                            stops: [
-                                .init(color: colorScheme == .dark ? Color.white.opacity(isHighlighted ? 0.38 : 0.22) : Color.white.opacity(0.90), location: 0.0),
-                                .init(color: colorScheme == .dark ? Color.white.opacity(0.05) : Color.black.opacity(0.05), location: 1.0)
-                            ],
-                            startPoint: .top,
-                            endPoint: .bottom
-                        ),
-                        lineWidth: isHighlighted ? 1.2 : 0.8
+                        isHighlighted
+                            ? Color.accentColor.opacity(0.8)
+                            : (colorScheme == .dark ? Color.white.opacity(0.18) : Color.white.opacity(0.75)),
+                        lineWidth: isHighlighted ? 1.4 : 0.8
                     )
             }
+            .shadow(color: Color.black.opacity(0.03), radius: 4, x: 0, y: 1)
     }
 }
 
-/// 流体微光扫描动画修饰符（用于 Loading / 骨架屏态）
+/// 骨架屏扫描动态流光 (Shimmer)
 public struct LiquidShimmerModifier: ViewModifier {
-    @State private var phase: CGFloat = -1.0
+    @State private var phase: CGFloat = 0
+
+    public init() {}
 
     public func body(content: Content) -> some View {
         content
             .overlay {
                 GeometryReader { geo in
-                    let width = geo.size.width
                     LinearGradient(
                         stops: [
-                            .init(color: .clear, location: 0.0),
-                            .init(color: Color.white.opacity(0.25), location: 0.5),
-                            .init(color: .clear, location: 1.0)
+                            .init(color: Color.clear, location: 0.0),
+                            .init(color: Color.white.opacity(0.35), location: 0.48),
+                            .init(color: Color.white.opacity(0.55), location: 0.5),
+                            .init(color: Color.white.opacity(0.35), location: 0.52),
+                            .init(color: Color.clear, location: 1.0)
                         ],
                         startPoint: .topLeading,
                         endPoint: .bottomTrailing
                     )
-                    .offset(x: phase * width * 1.8)
-                    .blendMode(.plusLighter)
+                    .frame(width: geo.size.width * 2)
+                    .offset(x: -geo.size.width + (geo.size.width * 2) * phase)
                 }
                 .mask(content)
             }
             .onAppear {
-                withAnimation(.linear(duration: 1.8).repeatForever(autoreverses: false)) {
+                withAnimation(
+                    .linear(duration: 1.6)
+                    .repeatForever(autoreverses: false)
+                ) {
                     phase = 1.0
                 }
             }
@@ -189,8 +192,8 @@ public extension View {
         modifier(LiquidGlassModifier(cornerRadius: cornerRadius))
     }
 
-    func concentricGlassCard(cornerRadius: CGFloat = 16, isHighlighted: Bool = false) -> some View {
-        modifier(ConcentricGlassCardModifier(cornerRadius: cornerRadius, isHighlighted: isHighlighted))
+    func concentricGlassCard(cornerRadius: CGFloat = 14, isHighlighted: Bool = false, opacity: Double = 0.50) -> some View {
+        modifier(ConcentricGlassCardModifier(cornerRadius: cornerRadius, isHighlighted: isHighlighted, opacity: opacity))
     }
 
     func liquidShimmer() -> some View {
