@@ -67,7 +67,7 @@ struct OpenAITranslationService: TranslationService {
         request.timeoutInterval = 45
         request.setValue("Bearer " + configuration.apiKey, forHTTPHeaderField: "Authorization")
         request.setValue("application/json", forHTTPHeaderField: "Content-Type")
-        request.httpBody = try JSONSerialization.data(withJSONObject: [
+        var body: [String: Any] = [
             "model": configuration.model,
             "stream": false,
             "messages": [
@@ -84,7 +84,18 @@ struct OpenAITranslationService: TranslationService {
                 """],
                 ["role": "user", "content": text]
             ]
-        ])
+        ]
+        if configuration.isMiniMax {
+            // MiniMax reasoning models otherwise prepend <think>...</think> to
+            // message.content, which makes an otherwise valid JSON answer fail
+            // the structured response decoder. M2.x cannot disable thinking,
+            // so reasoning_split is needed there as well.
+            body["reasoning_split"] = true
+            if configuration.model.caseInsensitiveCompare("MiniMax-M3") == .orderedSame {
+                body["thinking"] = ["type": "disabled"]
+            }
+        }
+        request.httpBody = try JSONSerialization.data(withJSONObject: body)
         do {
             let (data, response) = try await session.data(for: request)
             try Task.checkCancellation()
@@ -130,8 +141,7 @@ struct OpenAITranslationService: TranslationService {
         do {
             let envelope = try JSONDecoder().decode(Envelope.self, from: data)
             guard let choice = envelope.choices.first, choice.finish_reason != "length",
-                  let content = choice.message.content.data(using: .utf8),
-                  let object = try JSONSerialization.jsonObject(with: content) as? [String: Any],
+                  let object = jsonObject(in: choice.message.content),
                   let primary = object["primaryResult"] as? String,
                   !primary.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
                 throw PanelFailure.message("模型返回格式无效，请重试")
@@ -166,5 +176,33 @@ struct OpenAITranslationService: TranslationService {
         } catch {
             throw PanelFailure.message("模型返回格式无效，请重试")
         }
+    }
+
+    /// Accepts the exact JSON requested in the prompt, plus common model
+    /// wrappers such as a MiniMax thinking block or a fenced JSON response.
+    private static func jsonObject(in content: String) -> [String: Any]? {
+        var candidate = content.trimmingCharacters(in: .whitespacesAndNewlines)
+        if let end = candidate.range(of: "</think>", options: [.caseInsensitive, .backwards]) {
+            candidate = String(candidate[end.upperBound...]).trimmingCharacters(in: .whitespacesAndNewlines)
+        }
+        if candidate.hasPrefix("```") {
+            candidate = candidate.replacingOccurrences(
+                of: #"^```(?:json)?\s*|\s*```$"#,
+                with: "",
+                options: [.regularExpression, .caseInsensitive]
+            )
+        }
+        guard let data = candidate.data(using: .utf8),
+              let object = try? JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            return nil
+        }
+        return object
+    }
+}
+
+private extension ModelConfiguration {
+    var isMiniMax: Bool {
+        model.lowercased().hasPrefix("minimax-")
+            || URL(string: baseURL)?.host?.lowercased().contains("minimax") == true
     }
 }

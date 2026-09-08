@@ -63,8 +63,6 @@ public struct PanelView: View {
         .foregroundStyle(LingoPalette.text)
         .font(.system(size: 13))
         .padding(18)
-        .animation(reduceMotion ? nil : LingoMotion.reveal, value: model.isCollapsed)
-        .animation(reduceMotion ? nil : LingoMotion.reveal, value: model.isExpanded)
         .animation(reduceMotion ? nil : LingoMotion.standard, value: model.activeAnnotationID)
         .animation(reduceMotion ? nil : LingoMotion.standard, value: phaseKey)
         .task {
@@ -320,7 +318,15 @@ private struct DisclosureRow: View {
 
     var body: some View {
         Button {
-            withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) { isExpanded.toggle() }
+            if isExpanded {
+                // Remove detail content before the panel frame contracts. Keeping the
+                // outgoing view in an animated transition makes it overlap the rows above.
+                isExpanded = false
+            } else {
+                withAnimation(reduceMotion ? nil : .easeInOut(duration: 0.18)) {
+                    isExpanded = true
+                }
+            }
         } label: {
             HStack {
                 Text(isExpanded ? "收起\(title)" : "查看\(title)")
@@ -392,7 +398,12 @@ private struct ChineseResultView: View {
                 }
                 detailLists(result: result)
             }
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .transition(
+                .asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .identity
+                )
+            )
         }
     }
 
@@ -492,7 +503,12 @@ private struct WordResultView: View {
                     }
                 }
             }
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .transition(
+                .asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .identity
+                )
+            )
         }
     }
 }
@@ -551,7 +567,12 @@ private struct SentenceResultView: View {
                     }
                 }
             }
-            .transition(.opacity.combined(with: .move(edge: .top)))
+            .transition(
+                .asymmetric(
+                    insertion: .opacity.combined(with: .move(edge: .top)),
+                    removal: .identity
+                )
+            )
         }
     }
 

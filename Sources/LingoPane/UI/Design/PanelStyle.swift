@@ -94,8 +94,6 @@ public struct PanelBackground: View {
             shape.inset(by: 1.4)
                 .strokeBorder(.white.opacity(contrast == .increased ? 0.25 : 0.055), lineWidth: 0.5)
         }
-        .shadow(color: .black.opacity(0.16), radius: 14, y: 8)
-        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
         .accessibilityHidden(true)
     }
 }

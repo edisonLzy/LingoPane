@@ -1,0 +1,121 @@
+name: CI and Release
+
+on:
+  pull_request:
+    branches:
+      - main
+  push:
+    branches:
+      - main
+  workflow_dispatch:
+
+concurrency:
+  group: ci-release-${{ github.ref }}
+  cancel-in-progress: false
+
+permissions:
+  contents: read
+
+jobs:
+  test:
+    name: Test
+    runs-on: macos-15
+    timeout-minutes: 15
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Show toolchain
+        run: swift --version
+
+      - name: Run tests
+        run: swift test
+
+  release:
+    name: Build and publish
+    needs: test
+    if: github.event_name != 'pull_request' && github.ref == 'refs/heads/main'
+    runs-on: macos-15
+    timeout-minutes: 20
+    permissions:
+      contents: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      BUILD_ARCHS: arm64 x86_64
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v4
+
+      - name: Determine release version
+        id: version
+        shell: bash
+        run: |
+          set -euo pipefail
+          base_version="$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' Resources/Info.plist)"
+          release_series="${base_version%.*}"
+          echo "app_version=${release_series}.${GITHUB_RUN_NUMBER}" >> "${GITHUB_OUTPUT}"
+
+      - name: Build application bundle
+        env:
+          APP_VERSION: ${{ steps.version.outputs.app_version }}
+          BUILD_NUMBER: ${{ github.run_number }}
+        run: ./scripts/build-app.sh
+
+      - name: Verify application bundle
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -x dist/LingoPane.app/Contents/MacOS/LingoPane
+          architectures="$(lipo -archs dist/LingoPane.app/Contents/MacOS/LingoPane)"
+          [[ "${architectures}" == *arm64* ]]
+          [[ "${architectures}" == *x86_64* ]]
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleShortVersionString' dist/LingoPane.app/Contents/Info.plist)" = "${{ steps.version.outputs.app_version }}"
+          codesign --verify --deep --strict dist/LingoPane.app
+
+      - name: Package release files
+        id: package
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          release_tag="v${{ steps.version.outputs.app_version }}"
+          archive="LingoPane-${release_tag}-macOS.zip"
+
+          ditto -c -k --sequesterRsrc --keepParent \
+            dist/LingoPane.app "dist/${archive}"
+          (
+            cd dist
+            shasum -a 256 "${archive}" > "${archive}.sha256"
+          )
+
+          echo "release_tag=${release_tag}" >> "${GITHUB_OUTPUT}"
+          echo "archive=${archive}" >> "${GITHUB_OUTPUT}"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: LingoPane-${{ steps.package.outputs.release_tag }}
+          path: |
+            dist/${{ steps.package.outputs.archive }}
+            dist/${{ steps.package.outputs.archive }}.sha256
+          if-no-files-found: error
+          retention-days: 14
+
+      - name: Create or update GitHub Release
+        shell: bash
+        run: |
+          set -euo pipefail
+
+          tag="${{ steps.package.outputs.release_tag }}"
+          archive="dist/${{ steps.package.outputs.archive }}"
+          checksum="${archive}.sha256"
+
+          if gh release view "${tag}" >/dev/null 2>&1; then
+            gh release upload "${tag}" "${archive}" "${checksum}" --clobber
+          else
+            gh release create "${tag}" "${archive}" "${checksum}" \
+              --target "${GITHUB_SHA}" \
+              --title "LingoPane ${{ steps.version.outputs.app_version }}" \
+              --generate-notes \
+              --latest
+          fi

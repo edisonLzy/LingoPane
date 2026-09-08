@@ -16,7 +16,33 @@ private final class StubProtocol: URLProtocol, @unchecked Sendable {
         }
         if path.contains("cancel") { return }
         let status = path.contains("auth") ? 401 : 200
-        let content = path.contains("invalid") ? "invalid" : #"{"primaryResult":"你好","meanings":[{"partOfSpeech":"interj.","meaning":"你好"},42],"ipa":42}"#
+        let valid = #"{"primaryResult":"你好","meanings":[{"partOfSpeech":"interj.","meaning":"你好"},42],"ipa":42}"#
+        let content: String
+        if request.url?.host == "api.minimax.io" {
+            let bodyData: Data? = request.httpBody ?? request.httpBodyStream.flatMap { stream in
+                stream.open()
+                defer { stream.close() }
+                var data = Data()
+                var buffer = [UInt8](repeating: 0, count: 4096)
+                while stream.hasBytesAvailable {
+                    let count = stream.read(&buffer, maxLength: buffer.count)
+                    guard count > 0 else { break }
+                    data.append(buffer, count: count)
+                }
+                return data
+            }
+            let body = bodyData.flatMap { try? JSONSerialization.jsonObject(with: $0) as? [String: Any] }
+            let thinking = body?["thinking"] as? [String: String]
+            let hasMiniMaxControls = body?["reasoning_split"] as? Bool == true
+                && thinking?["type"] == "disabled"
+            content = hasMiniMaxControls ? valid : "invalid"
+        } else if path.contains("invalid") {
+            content = "invalid"
+        } else if path.contains("thinking") {
+            content = "<think>reasoning with { braces }</think>\n```json\n\(valid)\n```"
+        } else {
+            content = valid
+        }
         let data = try! JSONSerialization.data(withJSONObject: [
             "choices": [["message": ["content": content], "finish_reason": "stop"]]
         ])
@@ -44,6 +70,26 @@ final class NetworkingTests: XCTestCase {
         XCTAssertEqual(result.kind, .word)
         XCTAssertEqual(result.meanings.count, 1)
         XCTAssertNil(result.ipa)
+    }
+
+    func testMiniMaxThinkingAndJSONFenceAreIgnored() async throws {
+        let result = try await service("thinking").analyze("hello", classification: classification)
+        XCTAssertEqual(result.primaryResult, "你好")
+    }
+
+    func testMiniMaxM3RequestsSeparatedDisabledThinking() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StubProtocol.self]
+        let service = OpenAITranslationService(
+            configuration: ModelConfiguration(
+                baseURL: "https://api.minimax.io/v1",
+                model: "MiniMax-M3",
+                apiKey: "test-key"
+            ),
+            session: URLSession(configuration: config)
+        )
+        let result = try await service.analyze("hello", classification: classification)
+        XCTAssertEqual(result.primaryResult, "你好")
     }
 
     func testHTTPAndTransportFailures() async {

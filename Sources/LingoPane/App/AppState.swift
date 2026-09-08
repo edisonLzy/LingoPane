@@ -3,8 +3,13 @@ import Foundation
 
 @MainActor
 public final class AppState: ObservableObject {
-    public static let shared = AppState(service: CommandLine.arguments.contains("--preview")
-        ? MockTranslationService() : ConfiguredTranslationService())
+    public static let shared: AppState = {
+        let preview = CommandLine.arguments.contains(where: { $0.hasPrefix("--preview") })
+        return AppState(
+            service: preview ? MockTranslationService() : ConfiguredTranslationService(),
+            persistsHistory: !preview
+        )
+    }()
 
     @Published public var query = ""
     @Published public private(set) var history: [HistoryItem]
