@@ -2,30 +2,20 @@
 import PackageDescription
 
 let package = Package(
-    name: "Translator",
-    platforms: [
-        .macOS(.v14)
-    ],
+    name: "LingoPane",
+    platforms: [.macOS(.v14)],
     products: [
-        .executable(
-            name: "Translator",
-            targets: ["Translator"]
-        )
-    ],
-    dependencies: [
-        // Zero external third-party dependencies!
-        // Pure Swift standard library + Foundation + SwiftUI + AVFoundation + AppKit.
+        .executable(name: "LingoPane", targets: ["LingoPane"])
     ],
     targets: [
         .executableTarget(
-            name: "Translator",
-            dependencies: [],
-            path: "Sources/Translator"
+            name: "LingoPane",
+            path: "Sources/LingoPane"
         ),
         .testTarget(
-            name: "TranslatorTests",
-            dependencies: ["Translator"],
-            path: "Tests/TranslatorTests"
+            name: "LingoPaneTests",
+            dependencies: ["LingoPane"],
+            path: "Tests/LingoPaneTests"
         )
     ]
 )

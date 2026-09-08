@@ -1,0 +1,61 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <title>LingoPane · Visual QA</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        margin: 0;
+        min-height: 100vh;
+        padding: 38px;
+        color: #2f211d;
+        background: #eee8e5;
+        font: 13px/1.45 -apple-system, BlinkMacSystemFont, "SF Pro Text", sans-serif;
+      }
+      h1 { margin: 0 0 8px; font-size: 22px; letter-spacing: -0.02em; }
+      p { margin: 0 0 26px; color: #77655f; }
+      main { display: flex; align-items: flex-start; gap: 32px; }
+      figure { margin: 0; }
+      figcaption { margin-bottom: 10px; font-weight: 650; }
+      .frame {
+        min-height: 440px;
+        padding: 18px;
+        overflow: hidden;
+        background: #fff;
+        border: 1px solid rgba(77, 43, 32, .16);
+        border-radius: 14px;
+        box-shadow: 0 16px 35px rgba(77, 43, 32, .12);
+      }
+      .reference { width: 387px; }
+      .reference img { display: block; width: 351px; height: 374px; }
+      .prototype { width: 454px; height: 440px; padding: 0; position: relative; }
+      .prototype iframe {
+        position: absolute;
+        left: -552px;
+        top: -132px;
+        width: 1304px;
+        height: 1248px;
+        border: 0;
+        pointer-events: none;
+      }
+      .note { margin-top: 14px; color: #8b7770; font-size: 11px; }
+    </style>
+  </head>
+  <body>
+    <h1>LingoPane · Panel visual comparison</h1>
+    <p>同一输入中对照参考图与默认英文句子 Panel，检查材质、层级、密度、圆角和控件语义。</p>
+    <main>
+      <figure>
+        <figcaption>Reference</figcaption>
+        <div class="frame reference"><img src="/reference-panel.png" alt="用户提供的深红色 macOS Panel 参考图" /></div>
+      </figure>
+      <figure>
+        <figcaption>Implementation · default sentence state</figcaption>
+        <div class="frame prototype"><iframe src="/" title="LingoPane implementation"></iframe></div>
+        <div class="note">Viewport 1304 × 1248，裁切到 Panel 区域；非产品界面。</div>
+      </figure>
+    </main>
+  </body>
+</html>
