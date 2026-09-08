@@ -5,7 +5,7 @@ import SwiftUI
 public final class StatusBarController: NSObject {
     public static let shared = StatusBarController()
 
-    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.variableLength)
+    private let statusItem = NSStatusBar.system.statusItem(withLength: NSStatusItem.squareLength)
     private let popover = NSPopover()
     private var state: AppState?
 
@@ -17,8 +17,8 @@ public final class StatusBarController: NSObject {
         self.state = state
         if let button = statusItem.button {
             button.image = NSImage(systemSymbolName: "character.bubble.fill", accessibilityDescription: "LingoPane")
-            button.imagePosition = .imageLeading
-            button.title = "LingoPane"
+            button.imagePosition = .imageOnly
+            button.title = ""
             button.target = self
             button.action = #selector(handleStatusItemClick)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])

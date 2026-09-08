@@ -7,16 +7,24 @@ struct AnnotatedSentenceView: NSViewRepresentable {
     func makeNSView(context: Context) -> NSScrollView {
         let scroll = NSScrollView()
         scroll.drawsBackground = false
-        scroll.hasVerticalScroller = true
-        scroll.autohidesScrollers = true
+        scroll.borderType = .noBorder
+        scroll.hasVerticalScroller = false
+        scroll.hasHorizontalScroller = false
+        scroll.verticalScrollElasticity = .none
+        scroll.horizontalScrollElasticity = .none
         let text = AnnotationTextView(frame: .zero)
         text.isEditable = false
         text.isSelectable = true
         text.drawsBackground = false
         text.textContainerInset = NSSize(width: 1, height: 3)
         text.textContainer?.lineFragmentPadding = 0
+        text.textContainer?.lineBreakMode = .byWordWrapping
+        text.textContainer?.widthTracksTextView = true
+        text.textContainer?.heightTracksTextView = false
         text.isHorizontallyResizable = false
         text.isVerticallyResizable = true
+        text.minSize = NSSize(width: 0, height: 0)
+        text.maxSize = NSSize(width: CGFloat.greatestFiniteMagnitude, height: CGFloat.greatestFiniteMagnitude)
         text.autoresizingMask = [.width]
         scroll.documentView = text
         return scroll
@@ -30,15 +38,22 @@ struct AnnotatedSentenceView: NSViewRepresentable {
             includeNested: model.showNestedStructures)
     }
 
-    func sizeThatFits(_ proposal: ProposedViewSize, nsView: NSScrollView, context: Context) -> CGSize? {
-        guard let text = nsView.documentView as? AnnotationTextView,
-              let container = text.textContainer, let manager = text.layoutManager else { return nil }
-        let width = max(100, proposal.width ?? 270)
-        container.containerSize = CGSize(width: width - 4, height: .greatestFiniteMagnitude)
+    func sizeThatFits(_ proposal: ProposedViewSize, nsView scroll: NSScrollView, context: Context) -> CGSize? {
+        guard let text = scroll.documentView as? AnnotationTextView else { return nil }
+        guard let container = text.textContainer, let manager = text.layoutManager else { return nil }
+        let width = Self.resolvedWidth(proposal.width, currentWidth: scroll.frame.width)
+        let contentWidth = max(96, width - scroll.contentInsets.left - scroll.contentInsets.right)
+        text.setFrameSize(CGSize(width: contentWidth, height: max(text.frame.height, 24)))
+        container.containerSize = CGSize(width: contentWidth, height: .greatestFiniteMagnitude)
         manager.ensureLayout(for: container)
         let height = ceil(manager.usedRect(for: container).height) + 8
-        text.setFrameSize(CGSize(width: width, height: max(height, 24)))
-        return CGSize(width: width, height: min(model.isExpanded ? 144 : 88, max(24, height)))
+        text.setFrameSize(CGSize(width: contentWidth, height: max(height, 24)))
+        return CGSize(width: width, height: max(24, height))
+    }
+
+    static func resolvedWidth(_ proposedWidth: CGFloat?, currentWidth: CGFloat) -> CGFloat {
+        let candidate = proposedWidth ?? currentWidth
+        return candidate.isFinite && candidate >= 100 ? candidate : 270
     }
 }
 

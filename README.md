@@ -23,7 +23,7 @@ Fast Analyze 当前返回主译文、词义、IPA 和句子主干。学习字段
 网络请求超时为 45 秒；失败可通过 Panel 重试，替换查询或关闭 Panel 会取消旧请求。
 展开学习详情会按需调用 Deep Analyze；学习层失败保留主译文并可单独重试。Fast/Deep 分级缓存保留 7 天、最多 200 项，可在设置中清空。
 
-使用 `scripts/build-app.sh` 生成 `dist/LingoPane.app`。默认使用本地 ad-hoc 签名；设置 `SIGNING_IDENTITY` 可选择签名身份。分发公证、图标和跨应用验收仍在推进。
+使用 `scripts/build-app.sh` 生成可直接启动的 `dist/LingoPane.app`。默认使用本地 ad-hoc 签名；设置 `SIGNING_IDENTITY` 可选择签名身份。应用已包含适配 macOS Dock 的完整多尺寸图标；正式分发仍需使用 Apple Developer 身份签名并完成公证。
 
 返回契约见 [Fast Analyze Schema](docs/schemas/fast-analyze.schema.json)，详细计划见 [开发进度](docs/progress.md)。
 接口依据：[MiniMax 官方文档](https://platform.minimaxi.com/docs/api-reference/text-chat-openai)。

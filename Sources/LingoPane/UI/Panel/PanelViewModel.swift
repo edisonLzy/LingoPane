@@ -94,10 +94,18 @@ public final class PanelViewModel: ObservableObject, Identifiable {
     public func hoverAnnotation(_ id: UUID?) {
         hoverTask?.cancel()
         if id == nil {
-            hoveredAnnotationID = nil
-            dismissedAnnotationID = nil
+            // Resizing the floating panel can briefly invalidate AppKit tracking
+            // areas. Keep the card alive through that synthetic mouse-exit so it
+            // does not repeatedly disappear and reappear under a stationary cursor.
+            hoverTask = Task { [weak self] in
+                try? await Task.sleep(for: .milliseconds(140))
+                guard !Task.isCancelled else { return }
+                self?.hoveredAnnotationID = nil
+                self?.dismissedAnnotationID = nil
+            }
             return
         }
+        guard hoveredAnnotationID != id else { return }
         hoverTask = Task { [weak self] in
             try? await Task.sleep(for: .milliseconds(240))
             guard !Task.isCancelled else { return }

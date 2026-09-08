@@ -147,6 +147,7 @@ public struct PanelView: View {
             HStack(alignment: .top, spacing: 10) {
                 AnnotatedSentenceView(model: model)
                     .frame(maxWidth: .infinity, alignment: .leading)
+                    .layoutPriority(1)
 
                 if model.classification.language == .english {
                     LingoIconButton(systemName: "play.fill", label: "播放英文原文") {

@@ -55,6 +55,44 @@ final class AnnotationAndRecoveryTests: XCTestCase {
         XCTAssertEqual(view.accessibilityCustomActions()?.count, 1)
     }
 
+    @MainActor
+    func testOriginalSentenceUsesFiniteWidthAndWraps() {
+        XCTAssertEqual(AnnotatedSentenceView.resolvedWidth(.infinity, currentWidth: 0), 270)
+        XCTAssertEqual(AnnotatedSentenceView.resolvedWidth(320, currentWidth: 0), 320)
+
+        let source = "The feature that we discussed yesterday has been implemented."
+        let text = AnnotationTextView(frame: NSRect(x: 0, y: 0, width: 220, height: 24))
+        text.textContainerInset = NSSize(width: 1, height: 3)
+        text.textContainer?.lineFragmentPadding = 0
+        text.textContainer?.lineBreakMode = .byWordWrapping
+        text.textContainer?.widthTracksTextView = true
+        text.configure(source: source, annotations: [], includeNested: false)
+        text.layoutManager?.ensureLayout(for: text.textContainer!)
+
+        let usedHeight = text.layoutManager?.usedRect(for: text.textContainer!).height ?? 0
+        XCTAssertGreaterThan(usedHeight, 30, "The preview sentence must occupy multiple lines at panel width")
+    }
+
+    @MainActor
+    func testTransientMouseExitDoesNotFlickerAnnotationCard() async throws {
+        let model = PanelViewModel(source: "A sentence.", classification: Classification(language: .english, kind: .sentence))
+        let id = UUID()
+
+        model.hoverAnnotation(id)
+        try await Task.sleep(for: .milliseconds(260))
+        XCTAssertEqual(model.hoveredAnnotationID, id)
+
+        model.hoverAnnotation(nil)
+        XCTAssertEqual(model.hoveredAnnotationID, id, "A tracking-area refresh must not hide the card immediately")
+        model.hoverAnnotation(id)
+        try await Task.sleep(for: .milliseconds(160))
+        XCTAssertEqual(model.hoveredAnnotationID, id)
+
+        model.hoverAnnotation(nil)
+        try await Task.sleep(for: .milliseconds(160))
+        XCTAssertNil(model.hoveredAnnotationID)
+    }
+
     func testSnapshotRecoversInterruptedWriteAndClearedData() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
