@@ -2,15 +2,20 @@ import AppKit
 import SwiftUI
 
 public enum LingoPalette {
-    public static let panelTint = Color(red: 0.49, green: 0.06, blue: 0.08)
-    public static let panelStrong = Color(red: 0.36, green: 0.025, blue: 0.045)
+    public static let cornerRadius: CGFloat = 24
     public static let text = Color.white.opacity(0.97)
-    public static let secondary = Color.white.opacity(0.66)
-    public static let tertiary = Color.white.opacity(0.46)
-    public static let divider = Color.white.opacity(0.12)
-    public static let surface = Color.white.opacity(0.07)
+    public static let secondary = Color.white.opacity(0.78)
+    public static let tertiary = Color.white.opacity(0.62)
+    public static let divider = Color.white.opacity(0.09)
+    public static let surface = Color.white.opacity(0.055)
     public static let surfaceHover = Color.white.opacity(0.12)
-    public static let accent = Color(red: 1.0, green: 0.68, blue: 0.60)
+    public static let accent = Color(red: 0.72, green: 0.88, blue: 1.0)
+}
+
+public enum LingoMotion {
+    public static let quick = Animation.easeOut(duration: 0.14)
+    public static let standard = Animation.spring(response: 0.28, dampingFraction: 0.86)
+    public static let reveal = Animation.spring(response: 0.34, dampingFraction: 0.88)
 }
 
 public struct VisualEffectView: NSViewRepresentable {
@@ -30,6 +35,10 @@ public struct VisualEffectView: NSViewRepresentable {
         view.material = material
         view.blendingMode = blendingMode
         view.state = .active
+        view.appearance = NSAppearance(named: .darkAqua)
+        view.wantsLayer = true
+        view.layer?.cornerRadius = LingoPalette.cornerRadius
+        view.layer?.masksToBounds = true
         return view
     }
 
@@ -39,24 +48,55 @@ public struct VisualEffectView: NSViewRepresentable {
     }
 }
 
+/// Native behind-window frost, with a restrained reflective rim.
+/// Uses public macOS 14 APIs and honors the system transparency/contrast preferences.
 public struct PanelBackground: View {
+    @Environment(\.accessibilityReduceTransparency) private var reduceTransparency
+    @Environment(\.colorSchemeContrast) private var contrast
+
     public init() {}
+
+    private var shape: RoundedRectangle {
+        RoundedRectangle(cornerRadius: LingoPalette.cornerRadius, style: .continuous)
+    }
 
     public var body: some View {
         ZStack {
-            VisualEffectView()
-            LinearGradient(
-                colors: [LingoPalette.panelTint.opacity(0.91), LingoPalette.panelStrong.opacity(0.95)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
+            if reduceTransparency {
+                Color(white: 0.13)
+            } else {
+                VisualEffectView()
+                // Keep the material exposed so actual desktop colors remain visible.
+                LinearGradient(
+                    stops: [
+                        .init(color: .white.opacity(0.09), location: 0),
+                        .init(color: .white.opacity(0.015), location: 0.32),
+                        .init(color: .black.opacity(0.10), location: 1)
+                    ],
+                    startPoint: .topLeading, endPoint: .bottomTrailing
+                )
+            }
+        }
+        .clipShape(shape)
+        .overlay {
+            shape.strokeBorder(
+                LinearGradient(stops: [
+                    .init(color: .white.opacity(0.65), location: 0),
+                    .init(color: .white.opacity(0.18), location: 0.27),
+                    .init(color: .white.opacity(0.07), location: 0.48),
+                    .init(color: Color(red: 0.68, green: 0.85, blue: 0.95).opacity(0.30), location: 0.73),
+                    .init(color: .white.opacity(0.46), location: 1)
+                ], startPoint: .topLeading, endPoint: .bottomTrailing),
+                lineWidth: contrast == .increased ? 1.5 : 0.8
             )
         }
-        .clipShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
         .overlay {
-            RoundedRectangle(cornerRadius: 14, style: .continuous)
-                .stroke(Color.white.opacity(0.20), lineWidth: 0.75)
+            shape.inset(by: 1.4)
+                .strokeBorder(.white.opacity(contrast == .increased ? 0.25 : 0.055), lineWidth: 0.5)
         }
-        .shadow(color: Color.black.opacity(0.34), radius: 24, y: 14)
+        .shadow(color: .black.opacity(0.16), radius: 14, y: 8)
+        .shadow(color: .black.opacity(0.12), radius: 2, y: 1)
+        .accessibilityHidden(true)
     }
 }
 
@@ -64,6 +104,8 @@ public struct LingoIconButton: View {
     let systemName: String
     let label: String
     let action: () -> Void
+    @State private var hovered = false
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
 
     public init(systemName: String, label: String, action: @escaping () -> Void) {
         self.systemName = systemName
@@ -79,6 +121,10 @@ public struct LingoIconButton: View {
                 .contentShape(Rectangle())
         }
         .buttonStyle(PanelIconButtonStyle())
+        .background(hovered ? LingoPalette.surfaceHover : Color.clear, in: RoundedRectangle(cornerRadius: 8))
+        .scaleEffect(hovered && !reduceMotion ? 1.06 : 1)
+        .animation(reduceMotion ? nil : LingoMotion.quick, value: hovered)
+        .onHover { hovered = $0 }
         .help(label)
         .accessibilityLabel(label)
     }
@@ -106,7 +152,7 @@ public struct PanelSection<Content: View>: View {
         VStack(alignment: .leading, spacing: 8) {
             if let title {
                 Text(title)
-                    .font(.system(size: 10, weight: .medium))
+                    .font(.system(size: 11, weight: .medium))
                     .foregroundStyle(LingoPalette.secondary)
             }
             content

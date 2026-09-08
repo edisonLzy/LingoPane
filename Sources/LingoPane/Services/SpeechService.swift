@@ -5,6 +5,7 @@ public final class SpeechService: NSObject, ObservableObject, AVSpeechSynthesize
     public static let shared = SpeechService()
 
     @Published public private(set) var isSpeaking = false
+    private var currentText: String?
     private let synthesizer = AVSpeechSynthesizer()
 
     private override init() {
@@ -13,11 +14,20 @@ public final class SpeechService: NSObject, ObservableObject, AVSpeechSynthesize
     }
 
     public func toggle(_ text: String, language: Language = .english) {
-        if synthesizer.isSpeaking {
-            synthesizer.stopSpeaking(at: .immediate)
-            isSpeaking = false
-            return
+        if currentText == text {
+            if synthesizer.isPaused {
+                synthesizer.continueSpeaking()
+                isSpeaking = true
+                return
+            }
+            if synthesizer.isSpeaking {
+                synthesizer.pauseSpeaking(at: .immediate)
+                isSpeaking = false
+                return
+            }
         }
+        synthesizer.stopSpeaking(at: .immediate)
+        currentText = text
 
         let utterance = AVSpeechUtterance(string: text)
         let configuredLocale = language == .english

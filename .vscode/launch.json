@@ -1,0 +1,24 @@
+{
+    "configurations": [
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:LingoPane}",
+            "name": "Debug LingoPane",
+            "target": "LingoPane",
+            "configuration": "debug",
+            "preLaunchTask": "swift: Build Debug LingoPane"
+        },
+        {
+            "type": "swift",
+            "request": "launch",
+            "args": [],
+            "cwd": "${workspaceFolder:LingoPane}",
+            "name": "Release LingoPane",
+            "target": "LingoPane",
+            "configuration": "release",
+            "preLaunchTask": "swift: Build Release LingoPane"
+        }
+    ]
+}

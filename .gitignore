@@ -4,3 +4,5 @@
 *.xcuserstate
 .swiftpm/
 Translator.app/Contents/MacOS/Translator
+
+/dist/

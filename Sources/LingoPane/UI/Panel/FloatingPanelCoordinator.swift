@@ -23,6 +23,7 @@ public final class FloatingPanelCoordinator: NSObject, NSWindowDelegate {
 
     private var entries: [Entry] = []
     private var globalMouseMonitor: Any?
+    private var localMouseMonitor: Any?
     private var localKeyMonitor: Any?
 
     private override init() {
@@ -46,8 +47,7 @@ public final class FloatingPanelCoordinator: NSObject, NSWindowDelegate {
 
         let model = PanelViewModel(source: source, classification: classification)
         model.windowAnchor = point
-        let width = min(max(UserDefaults.standard.double(forKey: "panelWidth"), 360), 480)
-        let effectiveWidth = width == 360 ? 400 : width
+        let effectiveWidth = min(max(UserDefaults.standard.object(forKey: "panelWidth") as? Double ?? 400, 360), 480)
         let window = LingoFloatingPanel(
             contentRect: NSRect(x: 0, y: 0, width: effectiveWidth, height: 500),
             styleMask: [.borderless, .nonactivatingPanel, .fullSizeContentView],
@@ -59,9 +59,10 @@ public final class FloatingPanelCoordinator: NSObject, NSWindowDelegate {
         window.hidesOnDeactivate = false
         window.isOpaque = false
         window.backgroundColor = .clear
-        window.hasShadow = true
+        window.hasShadow = false
+        window.appearance = NSAppearance(named: .darkAqua)
         window.isMovableByWindowBackground = true
-        window.collectionBehavior = [.canJoinAllSpaces, .fullScreenAuxiliary]
+        window.collectionBehavior = [.fullScreenAuxiliary]
         window.delegate = self
 
         let entry = Entry(window: window, model: model)
@@ -70,13 +71,44 @@ public final class FloatingPanelCoordinator: NSObject, NSWindowDelegate {
             guard let model else { return }
             self?.close(model: model)
         }
-        model.pinAction = { [weak model] in model?.isPinned.toggle() }
+        model.resizeAction = { [weak window, weak model] height in
+            guard let window, let model else { return }
+            let visible = window.screen?.visibleFrame ?? NSScreen.main?.visibleFrame ?? window.frame
+            let newHeight = min(model.isCollapsed ? 78 : max(height, 180), min(560, visible.height))
+            guard abs(window.frame.height - newHeight) > 1 else { return }
+            var frame = window.frame
+            frame.origin.y += frame.height - newHeight
+            frame.size.height = newHeight
+            frame.origin.y = max(visible.minY, min(frame.origin.y, visible.maxY - newHeight))
+            if NSWorkspace.shared.accessibilityDisplayShouldReduceMotion {
+                window.setFrame(frame, display: true)
+            } else {
+                NSAnimationContext.runAnimationGroup { context in
+                    context.duration = 0.22
+                    context.timingFunction = CAMediaTimingFunction(name: .easeInEaseOut)
+                    window.animator().setFrame(frame, display: true)
+                }
+            }
+        }
+        model.pinAction = { [weak self, weak model] in
+            guard let self, let model else { return }
+            if !model.isPinned && self.entries.filter({ $0.model.isPinned }).count >= 8 {
+                model.notice = "最多固定 8 个 Panel，请先取消固定或关闭一个。"
+                return
+            }
+            model.notice = nil
+            model.isPinned.toggle()
+            if !model.isPinned {
+                model.isCollapsed = false
+                self.entries.filter { !$0.model.isPinned && $0.model.id != model.id }.forEach { self.close(model: $0.model) }
+            }
+        }
         model.switchKindAction = { [weak model] kind in
             guard let model else { return }
             let language: Language = kind == .chinese ? .chinese : .english
             let override = Classification(language: language, kind: kind)
             model.classification = override
-            AppState.shared.translate(model.source, near: model.windowAnchor, classificationOverride: override)
+            AppState.shared.translate(model.source, near: model.windowAnchor, classificationOverride: override, scene: model.scene, target: model)
         }
 
         window.contentView = NSHostingView(rootView: PanelView(model: model))
@@ -87,6 +119,7 @@ public final class FloatingPanelCoordinator: NSObject, NSWindowDelegate {
 
     public func close(model: PanelViewModel) {
         guard let index = entries.firstIndex(where: { $0.model.id == model.id }) else { return }
+        model.cancelAction?()
         let entry = entries.remove(at: index)
         entry.window.orderOut(nil)
         entry.window.contentView = nil
@@ -102,26 +135,19 @@ public final class FloatingPanelCoordinator: NSObject, NSWindowDelegate {
 
     public func arrangePinnedPanels() {
         let pinned = entries
-            .filter { $0.model.isPinned && $0.window.isVisible }
+            .filter { $0.model.isPinned && $0.window.isVisible && $0.window.isOnActiveSpace }
             .sorted { $0.createdAt > $1.createdAt }
-        guard let screen = NSScreen.main else { return }
+        guard let screen = NSScreen.screens.first(where: { $0.frame.contains(NSEvent.mouseLocation) }) ?? NSScreen.main else { return }
         let visible = screen.visibleFrame
-        let spacing: CGFloat = 12
-        var x = visible.maxX
-        var y = visible.maxY
-        var columnWidth: CGFloat = 0
-
-        for entry in pinned {
-            let size = entry.window.frame.size
-            if y - size.height < visible.minY {
-                x -= columnWidth + spacing
-                y = visible.maxY
-                columnWidth = 0
-            }
-            let origin = NSPoint(x: x - size.width, y: y - size.height)
-            entry.window.setFrameOrigin(origin)
-            y -= size.height + spacing
-            columnWidth = max(columnWidth, size.width)
+        var frames = PanelArrangement.frames(sizes: pinned.map { $0.window.frame.size }, in: visible)
+        if frames == nil {
+            pinned.forEach { $0.model.isCollapsed = true }
+            frames = PanelArrangement.frames(sizes: pinned.map { NSSize(width: $0.window.frame.width, height: 78) }, in: visible)
+            pinned.forEach { $0.model.notice = "已整理 \(pinned.count) 个 Panel；空间不足，已折叠为标题态。" }
+        }
+        guard let frames else { return }
+        for (entry, frame) in zip(pinned, frames) {
+            entry.window.setFrame(frame, display: true)
         }
     }
 
@@ -155,13 +181,26 @@ public final class FloatingPanelCoordinator: NSObject, NSWindowDelegate {
             }
         }
 
-        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
-            guard event.keyCode == 53 else { return event }
+        localMouseMonitor = NSEvent.addLocalMonitorForEvents(matching: [.leftMouseDown, .rightMouseDown]) { [weak self] event in
+            let windowNumber = event.windowNumber
             Task { @MainActor in
-                guard let model = self?.entries.first(where: { $0.window.isKeyWindow })?.model else { return }
-                model.handleEscape()
+                guard let self else { return }
+                let defaults = UserDefaults.standard
+                guard defaults.object(forKey: "closeTemporaryOnBlur") == nil || defaults.bool(forKey: "closeTemporaryOnBlur") else { return }
+                self.entries.filter { !$0.model.isPinned && $0.window.windowNumber != windowNumber }
+                    .forEach { self.close(model: $0.model) }
             }
-            return nil
+            return event
+        }
+
+        localKeyMonitor = NSEvent.addLocalMonitorForEvents(matching: .keyDown) { [weak self] event in
+            let handled = MainActor.assumeIsolated {
+                guard event.keyCode == 53,
+                      let model = self?.entries.first(where: { $0.window.isKeyWindow && $0.window == event.window })?.model else { return false }
+                model.handleEscape()
+                return true
+            }
+            return handled ? nil : event
         }
     }
 }

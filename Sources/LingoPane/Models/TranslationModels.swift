@@ -193,6 +193,7 @@ public struct TranslationResult: Identifiable, Codable, Sendable {
     public let clauses: [ClauseExplanation]
     public let grammarPoints: [String]
     public let translationNote: String?
+    public let confusingWords: [Collocation]?
 
     public init(
         id: UUID = UUID(),
@@ -213,7 +214,8 @@ public struct TranslationResult: Identifiable, Codable, Sendable {
         annotations: [GrammarAnnotation] = [],
         clauses: [ClauseExplanation] = [],
         grammarPoints: [String] = [],
-        translationNote: String? = nil
+        translationNote: String? = nil,
+        confusingWords: [Collocation]? = nil
     ) {
         self.id = id
         self.source = source
@@ -234,6 +236,7 @@ public struct TranslationResult: Identifiable, Codable, Sendable {
         self.clauses = clauses
         self.grammarPoints = grammarPoints
         self.translationNote = translationNote
+        self.confusingWords = confusingWords
     }
 }
 

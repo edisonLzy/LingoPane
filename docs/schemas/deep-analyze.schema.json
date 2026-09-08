@@ -1,0 +1,220 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LingoPane Deep Analyze v1",
+  "type": "object",
+  "required": [
+    "primaryResult"
+  ],
+  "properties": {
+    "primaryResult": {
+      "type": "string",
+      "minLength": 1
+    },
+    "ipa": {
+      "type": "string"
+    },
+    "contextMeaning": {
+      "type": "string"
+    },
+    "sentenceSkeleton": {
+      "type": "string"
+    },
+    "meanings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "partOfSpeech",
+          "meaning"
+        ],
+        "properties": {
+          "partOfSpeech": {
+            "type": "string"
+          },
+          "meaning": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "alternatives": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "label",
+          "text",
+          "note"
+        ],
+        "properties": {
+          "label": {
+            "type": "string"
+          },
+          "text": {
+            "type": "string"
+          },
+          "note": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "keywordMappings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "source",
+          "target"
+        ],
+        "properties": {
+          "source": {
+            "type": "string"
+          },
+          "target": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "collocations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "phrase",
+          "meaning"
+        ],
+        "properties": {
+          "phrase": {
+            "type": "string"
+          },
+          "meaning": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "confusingWords": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "phrase",
+          "meaning"
+        ],
+        "properties": {
+          "phrase": {
+            "type": "string"
+          },
+          "meaning": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "examples": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "english",
+          "chinese"
+        ],
+        "properties": {
+          "english": {
+            "type": "string"
+          },
+          "chinese": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "clauses": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "text",
+          "type",
+          "explanation"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "type": {
+            "type": "string"
+          },
+          "explanation": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "annotations": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": [
+          "text",
+          "start",
+          "end",
+          "role",
+          "explanation"
+        ],
+        "properties": {
+          "text": {
+            "type": "string"
+          },
+          "start": {
+            "type": "integer"
+          },
+          "end": {
+            "type": "integer"
+          },
+          "role": {
+            "type": "string",
+            "enum": [
+              "subject",
+              "predicate",
+              "object",
+              "complement",
+              "modifier",
+              "adverbial",
+              "clause"
+            ]
+          },
+          "explanation": {
+            "type": "string"
+          },
+          "modifies": {
+            "type": "string"
+          }
+        }
+      }
+    },
+    "expressionNotes": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "wordForms": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "grammarPoints": {
+      "type": "array",
+      "items": {
+        "type": "string"
+      }
+    },
+    "translationNote": {
+      "type": "string"
+    }
+  }
+}

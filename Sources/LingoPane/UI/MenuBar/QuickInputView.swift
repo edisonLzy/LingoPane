@@ -37,6 +37,12 @@ public struct QuickInputView: View {
                             .stroke(Color.primary.opacity(0.10), lineWidth: 0.7)
                     }
                     .focused($inputFocused)
+                    .onKeyPress(keys: [.return], phases: .down) { key in
+                        if key.modifiers.contains(.shift) { return .ignored }
+                        guard !state.query.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else { return .handled }
+                        submit()
+                        return .handled
+                    }
                     .accessibilityLabel("输入需要翻译的内容")
 
                 HStack {

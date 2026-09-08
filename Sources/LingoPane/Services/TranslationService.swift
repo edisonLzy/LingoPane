@@ -2,6 +2,20 @@ import Foundation
 
 public protocol TranslationService: Sendable {
     func analyze(_ text: String, classification: Classification) async throws -> TranslationResult
+    func analyze(_ text: String, classification: Classification, scene: ExpressionScene, deep: Bool, refresh: Bool) async throws -> TranslationResult
+}
+
+public enum ExpressionScene: String, Codable, CaseIterable, Sendable {
+    case general = "通用"
+    case technical = "技术沟通"
+    case email = "正式邮件"
+    case casual = "口语"
+}
+
+public extension TranslationService {
+    func analyze(_ text: String, classification: Classification, scene: ExpressionScene, deep: Bool, refresh: Bool) async throws -> TranslationResult {
+        try await analyze(text, classification: classification)
+    }
 }
 
 public struct MockTranslationService: TranslationService {

@@ -1,6 +1,8 @@
 import SwiftUI
 
 public struct SettingsView: View {
+    @StateObject private var loginItem = LoginItemService()
+    @StateObject private var updates = UpdateService()
     @ObservedObject var state: AppState
     @AppStorage("closeTemporaryOnBlur") private var closeTemporaryOnBlur = true
     @AppStorage("showSentenceSkeleton") private var showSentenceSkeleton = true
@@ -9,11 +11,12 @@ public struct SettingsView: View {
     @AppStorage("speechLocale") private var speechLocale = "en-US"
     @AppStorage("provider") private var provider = "MiniMax"
     @AppStorage("model") private var model = "MiniMax-M2.1"
-    @AppStorage("baseURL") private var baseURL = "https://api.minimax.chat/v1"
+    @AppStorage("baseURL") private var baseURL = "https://api.minimaxi.com/v1"
     @AppStorage("saveHistory") private var saveHistory = true
     @AppStorage("historyRetention") private var historyRetention = 90
     @State private var apiKey = ""
     @State private var connectionStatus: String?
+    @State private var testing = false
 
     public init(state: AppState) {
         self.state = state
@@ -22,6 +25,8 @@ public struct SettingsView: View {
     public var body: some View {
         Form {
             Section("通用") {
+                Toggle("登录时启动", isOn: Binding(get: { loginItem.enabled }, set: { loginItem.setEnabled($0) }))
+                if let message = loginItem.message { Text(message).font(.caption) }
                 LabeledContent("全局快捷键") { Text("⌥ Space").monospaced() }
                 Toggle("失焦关闭临时 Panel", isOn: $closeTemporaryOnBlur)
                 HStack {
@@ -57,13 +62,37 @@ public struct SettingsView: View {
                 TextField("Base URL", text: $baseURL)
                 SecureField("API Key", text: $apiKey)
                 HStack {
-                    Button("测试连接") {
-                        connectionStatus = apiKey.isEmpty ? "当前使用离线演示服务" : "连接配置已记录，网络服务待接入"
+                    Button("保存 API Key") {
+                        do {
+                            try APIKeyStore.save(apiKey)
+                            connectionStatus = apiKey.isEmpty ? "API Key 已删除" : "API Key 已保存到 Keychain"
+                        } catch { connectionStatus = error.localizedDescription }
                     }
+                    Button(testing ? "测试中…" : "测试连接") {
+                        testing = true
+                        connectionStatus = nil
+                        let config = ModelConfiguration(baseURL: baseURL, model: model, apiKey: apiKey)
+                        Task {
+                            defer { testing = false }
+                            do {
+                                _ = try await OpenAITranslationService(configuration: config).analyze(
+                                    "hello", classification: Classification(language: .english, kind: .word))
+                                connectionStatus = "连接成功；API Key 需单独保存"
+                            } catch { connectionStatus = error.localizedDescription }
+                        }
+                    }
+                    .disabled(testing)
                     if let connectionStatus {
                         Text(connectionStatus).font(.caption).foregroundStyle(.secondary)
                     }
                 }
+            }
+
+            Section("应用更新") {
+                Button(updates.checking ? "检查中…" : "检查更新") { Task { await updates.check() } }
+                    .disabled(updates.checking)
+                if let message = updates.message { Text(message).font(.caption) }
+                if let url = updates.releaseURL { Link("查看版本并下载", destination: url) }
             }
 
             Section("隐私") {
@@ -74,9 +103,16 @@ public struct SettingsView: View {
                     Text("永久").tag(0)
                 }
                 .disabled(!saveHistory)
+                .onChange(of: historyRetention) { _, _ in state.pruneHistory() }
+                Button("清空翻译缓存") { Task { await AnalysisCache.shared.clear() } }
+                Text("翻译内容会发送至配置的模型服务；分析缓存仅保存在本机，保留 7 天、最多 200 项。").font(.caption).foregroundStyle(.secondary)
                 Button("清空历史", role: .destructive) { state.clearHistory() }
                     .disabled(state.history.isEmpty)
             }
+        }
+        .onAppear {
+            do { apiKey = try APIKeyStore.read() }
+            catch { connectionStatus = error.localizedDescription }
         }
         .formStyle(.grouped)
         .padding(10)

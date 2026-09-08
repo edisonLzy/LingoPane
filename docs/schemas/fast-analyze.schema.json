@@ -1,0 +1,23 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "LingoPane Fast Analyze v1",
+  "type": "object",
+  "required": ["primaryResult"],
+  "properties": {
+    "primaryResult": { "type": "string", "minLength": 1 },
+    "ipa": { "type": "string" },
+    "contextMeaning": { "type": "string" },
+    "sentenceSkeleton": { "type": "string" },
+    "meanings": {
+      "type": "array",
+      "items": {
+        "type": "object",
+        "required": ["partOfSpeech", "meaning"],
+        "properties": {
+          "partOfSpeech": { "type": "string" },
+          "meaning": { "type": "string" }
+        }
+      }
+    }
+  }
+}

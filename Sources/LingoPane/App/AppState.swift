@@ -3,7 +3,8 @@ import Foundation
 
 @MainActor
 public final class AppState: ObservableObject {
-    public static let shared = AppState()
+    public static let shared = AppState(service: CommandLine.arguments.contains("--preview")
+        ? MockTranslationService() : ConfiguredTranslationService())
 
     @Published public var query = ""
     @Published public private(set) var history: [HistoryItem]
@@ -11,19 +12,26 @@ public final class AppState: ObservableObject {
     @Published public var lastError: PanelFailure?
 
     public let classifier = LocalClassifier()
+    private let persistsHistory: Bool
     private let service: any TranslationService
+    private var requestIDs: [UUID: UUID] = [:]
     private var tasks: [UUID: Task<Void, Never>] = [:]
 
-    public init(service: any TranslationService = MockTranslationService()) {
+    public init(service: any TranslationService, persistsHistory: Bool = true) {
+        self.persistsHistory = persistsHistory
         self.service = service
-        self.history = HistoryStore.load()
+        self.history = persistsHistory ? HistoryStore.load() : []
     }
 
     public func translate(
         _ rawText: String,
         near anchor: NSPoint? = nil,
-        classificationOverride: Classification? = nil
+        classificationOverride: Classification? = nil,
+        scene: ExpressionScene = .general,
+        refresh: Bool = false,
+        target: PanelViewModel? = nil
     ) {
+        let started = Date()
         let text = rawText.trimmingCharacters(in: .whitespacesAndNewlines)
         guard !text.isEmpty else {
             lastError = .noSelection
@@ -33,12 +41,21 @@ public final class AppState: ObservableObject {
 
         query = text
         let classification = classificationOverride ?? classifier.classify(text)
-        let model = FloatingPanelCoordinator.shared.presentLoading(
+        let model = target ?? FloatingPanelCoordinator.shared.presentLoading(
             source: text,
             classification: classification,
             near: anchor ?? NSEvent.mouseLocation
         )
 
+        Diagnostics.duration("query_to_panel", since: started)
+        if target != nil { model.start(source: text, classification: classification) }
+        model.scene = scene
+        cancelTranslation(for: model.id)
+        model.cancelAction = { [weak self, weak model] in
+            guard let model else { return }
+            model.deepTask?.cancel()
+            self?.cancelTranslation(for: model.id)
+        }
         guard text.count <= 500 else {
             let failure = PanelFailure.overlong(limit: 500)
             lastError = failure
@@ -46,35 +63,85 @@ public final class AppState: ObservableObject {
             return
         }
 
-        tasks[model.id]?.cancel()
         isWorking = true
         lastError = nil
 
         model.retryAction = { [weak self, weak model] in
             guard let self, let model else { return }
             self.tasks[model.id]?.cancel()
-            self.translate(text, near: model.windowAnchor, classificationOverride: classification)
+            self.translate(text, near: model.windowAnchor, classificationOverride: classification, scene: model.scene, refresh: true, target: model)
         }
 
+        model.sceneAction = { [weak self, weak model] scene in
+            guard let self, let model else { return }
+            self.translate(text, near: model.windowAnchor, classificationOverride: classification, scene: scene, target: model)
+        }
+        model.deepAction = { [weak self, weak model] in
+            guard let self, let model else { return }
+            self.loadDeep(model)
+        }
+        let requestID = UUID()
+        requestIDs[model.id] = requestID
         tasks[model.id] = Task { [weak self, weak model, service] in
+            defer {
+                if let self, let model, self.requestIDs[model.id] == requestID {
+                    self.tasks[model.id] = nil
+                    self.requestIDs[model.id] = nil
+                    self.isWorking = !self.tasks.isEmpty
+                }
+            }
             do {
-                let result = try await service.analyze(text, classification: classification)
-                guard !Task.isCancelled, let self, let model else { return }
+                let result = try await service.analyze(text, classification: classification, scene: scene, deep: false, refresh: refresh)
+                guard !Task.isCancelled, let self, let model, self.requestIDs[model.id] == requestID else { return }
                 model.succeed(result)
                 self.record(result)
-                self.isWorking = false
-                self.tasks[model.id] = nil
+                if model.isExpanded { self.loadDeep(model) }
             } catch is CancellationError {
                 return
             } catch {
-                guard let self, let model else { return }
+                guard !Task.isCancelled, let self, let model, self.requestIDs[model.id] == requestID else { return }
                 let failure = (error as? PanelFailure) ?? .message(error.localizedDescription)
                 model.fail(failure)
                 self.lastError = failure
-                self.isWorking = false
-                self.tasks[model.id] = nil
             }
         }
+    }
+
+    private func loadDeep(_ model: PanelViewModel) {
+        guard !model.deepLoading, !model.deepReady, let base = model.result else { return }
+        model.deepLoading = true
+        model.deepFailure = nil
+        let scene = model.scene
+        let classification = model.classification
+        model.deepTask = Task { [weak self, weak model, service] in
+            do {
+                let deep = try await service.analyze(base.source, classification: classification, scene: scene, deep: true, refresh: false)
+                guard !Task.isCancelled, let model else { return }
+                let merged = TranslationResult(
+                    source: base.source, language: base.language, kind: base.kind, primaryResult: base.primaryResult,
+                    ipa: deep.ipa ?? base.ipa, meanings: deep.meanings.isEmpty ? base.meanings : deep.meanings,
+                    contextMeaning: deep.contextMeaning ?? base.contextMeaning, alternatives: deep.alternatives,
+                    keywordMappings: deep.keywordMappings, expressionNotes: deep.expressionNotes,
+                    collocations: deep.collocations, wordForms: deep.wordForms, examples: deep.examples,
+                    sentenceSkeleton: deep.sentenceSkeleton ?? base.sentenceSkeleton,
+                    annotations: deep.annotations, clauses: deep.clauses, grammarPoints: deep.grammarPoints,
+                    translationNote: deep.translationNote, confusingWords: deep.confusingWords)
+                model.phase = .ready(merged)
+                model.deepReady = true
+                model.deepLoading = false
+                self?.record(merged)
+            } catch {
+                guard !Task.isCancelled, let model else { return }
+                model.deepLoading = false
+                model.deepFailure = error.localizedDescription
+            }
+        }
+    }
+
+    public func cancelTranslation(for id: UUID) {
+        tasks.removeValue(forKey: id)?.cancel()
+        requestIDs[id] = nil
+        isWorking = !tasks.isEmpty
     }
 
     public func triggerSelectionTranslation() {
@@ -86,7 +153,7 @@ public final class AppState: ObservableObject {
         }
 
         if let selected = SelectionProvider.shared.selectedText() {
-            translate(selected)
+            translate(selected, near: SelectionProvider.shared.selectionAnchor)
         } else {
             lastError = .noSelection
             StatusBarController.shared.showPopover()
@@ -99,12 +166,17 @@ public final class AppState: ObservableObject {
 
     public func deleteHistory(id: UUID) {
         history.removeAll { $0.id == id }
-        HistoryStore.save(history)
+        if persistsHistory { HistoryStore.save(history) }
+    }
+
+    public func pruneHistory() {
+        history = HistoryStore.prune(history)
+        if persistsHistory { HistoryStore.save(history) }
     }
 
     public func clearHistory() {
         history.removeAll()
-        HistoryStore.save(history)
+        if persistsHistory { HistoryStore.save(history) }
     }
 
     public func copy(_ text: String) {
@@ -113,24 +185,47 @@ public final class AppState: ObservableObject {
     }
 
     private func record(_ result: TranslationResult) {
+        guard HistoryStore.isEnabled else { return }
+        history = HistoryStore.prune(history)
         history.removeAll { $0.result.source == result.source }
         history.insert(HistoryItem(result: result), at: 0)
         history = Array(history.prefix(100))
-        HistoryStore.save(history)
+        if persistsHistory { HistoryStore.save(history) }
     }
 }
 
-private enum HistoryStore {
+enum HistoryStore {
+    static var isEnabled: Bool { UserDefaults.standard.object(forKey: "saveHistory") == nil || UserDefaults.standard.bool(forKey: "saveHistory") }
     private static let key = "LingoPane.translationHistory.v1"
+    private static var store: SnapshotStore<[HistoryItem]> {
+        SnapshotStore(url: URL.applicationSupportDirectory.appendingPathComponent("LingoPane/history-v2.json"))
+    }
 
     static func load() -> [HistoryItem] {
-        guard let data = UserDefaults.standard.data(forKey: key) else { return [] }
-        return (try? JSONDecoder().decode([HistoryItem].self, from: data)) ?? []
+        if let saved = store.load() {
+            let items = prune(saved)
+            save(items)
+            return items
+        }
+        guard let data = UserDefaults.standard.data(forKey: key),
+              let legacy = try? JSONDecoder().decode([HistoryItem].self, from: data) else { return [] }
+        let items = prune(legacy)
+        do {
+            try store.save(items)
+            UserDefaults.standard.removeObject(forKey: key)
+        } catch {
+            // Keep the legacy copy until migration has succeeded.
+        }
+        return items
+    }
+
+    static func prune(_ items: [HistoryItem], now: Date = .now, days: Int? = nil) -> [HistoryItem] {
+        let retention = days ?? (UserDefaults.standard.object(forKey: "historyRetention") == nil ? 90 : UserDefaults.standard.integer(forKey: "historyRetention"))
+        return Array(items.filter { retention <= 0 || now.timeIntervalSince($0.createdAt) < Double(retention) * 86400 }.prefix(100))
     }
 
     static func save(_ items: [HistoryItem]) {
-        guard UserDefaults.standard.bool(forKey: "saveHistory") || UserDefaults.standard.object(forKey: "saveHistory") == nil,
-              let data = try? JSONEncoder().encode(items) else { return }
-        UserDefaults.standard.set(data, forKey: key)
+        do { try store.save(items) }
+        catch { Diagnostics.storageFailure("history_write") }
     }
 }
