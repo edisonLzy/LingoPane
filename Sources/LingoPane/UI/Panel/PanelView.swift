@@ -13,6 +13,8 @@ public struct PanelView: View {
         switch model.phase {
         case .loading:
             "loading"
+        case .streaming:
+            "streaming"
         case .failed(let failure):
             "failed:" + (failure.errorDescription ?? "unknown")
         case .ready(let result):
@@ -167,12 +169,12 @@ public struct PanelView: View {
     private var phaseContent: some View {
         switch model.phase {
         case .loading:
-            LoadingResultView()
+            LoadingResultView(message: model.isReasoning ? "模型正在思考…" : "正在生成主译文…")
                 .transition(.opacity)
         case .failed(let failure):
             FailureResultView(failure: failure, retry: model.retryAction)
                 .transition(.opacity.combined(with: .move(edge: .bottom)))
-        case .ready(let result):
+        case .streaming(let result), .ready(let result):
             switch result.kind {
             case .chinese:
                 ChineseResultView(result: result, model: model)
@@ -199,6 +201,7 @@ public struct PanelView: View {
 }
 
 private struct LoadingResultView: View {
+    let message: String
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @State private var shimmerOffset: CGFloat = -1
 
@@ -207,7 +210,7 @@ private struct LoadingResultView: View {
             VStack(alignment: .leading, spacing: 9) {
                 skeleton(width: 240, opacity: 0.13)
                 skeleton(width: 190, opacity: 0.10)
-                Text("正在生成主译文…")
+                Text(message)
                     .font(.system(size: 11))
                     .foregroundStyle(LingoPalette.secondary)
             }
@@ -292,7 +295,6 @@ private struct PrimaryResultBlock: View {
         PanelSection(title) {
             HStack(alignment: .top, spacing: 8) {
                 Text(text)
-                    .id(text)
                     .font(.system(size: 16, weight: .semibold))
                     .lineSpacing(3)
                     .textSelection(.enabled)

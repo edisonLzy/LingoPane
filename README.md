@@ -33,7 +33,7 @@ macOS 14+ 菜单栏翻译工具，融合原生 Apple 设计与 AI 智能分析�
 ## 系统要求
 
 - macOS 14 (Sonoma) 或更高版本
-- 已配置 OpenAI-compatible API 的翻译服务（如 MiniMax、OpenAI 等）
+- 已配置云端 OpenAI-compatible API，或在本机运行 Ollama
 
 ## 快速开始
 
@@ -87,12 +87,20 @@ SIGNING_IDENTITY="Apple Development: Your Name" ./scripts/build-app.sh
 3. 选择或填写模型名称
 4. 输入 API Key，点击「保存 API Key」
 
+使用 Ollama 时，在“服务商”中选择“Ollama（本地）”即可，无需填写 API Key。默认地址为
+`http://127.0.0.1:11434`；请确保 Ollama 已启动并已下载所选模型，例如：
+
+```bash
+ollama pull qwen3.5:4b
+```
+
 ### 推荐配置
 
 | 服务 | Base URL | 模型示例 |
 |------|----------|----------|
 | MiniMax | `https://api.minimaxi.com/v1` | `abab6.5s-chat` |
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
+| Ollama（本地） | `http://127.0.0.1:11434` | `qwen3.5:4b` |
 
 ### 连接测试
 

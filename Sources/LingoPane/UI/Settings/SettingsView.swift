@@ -56,22 +56,41 @@ public struct SettingsView: View {
             Section("模型") {
                 Picker("服务商", selection: $provider) {
                     Text("MiniMax").tag("MiniMax")
+                    Text("Ollama（本地）").tag("Ollama")
                     Text("OpenAI-compatible").tag("OpenAI-compatible")
+                }
+                .onChange(of: provider) { _, newProvider in
+                    guard newProvider == ModelProvider.ollama.rawValue else { return }
+                    baseURL = "http://127.0.0.1:11434"
+                    if model.hasPrefix("MiniMax-") { model = "qwen3.5:4b" }
+                    connectionStatus = "请先在终端运行 ollama pull \(model)"
                 }
                 TextField("模型", text: $model)
                 TextField("Base URL", text: $baseURL)
-                SecureField("API Key", text: $apiKey)
+                if provider == ModelProvider.ollama.rawValue {
+                    Text("本地 Ollama 无需 API Key；默认翻译关闭思考，展开学习分析时启用。")
+                        .font(.caption).foregroundStyle(.secondary)
+                } else {
+                    SecureField("API Key", text: $apiKey)
+                }
                 HStack {
-                    Button("保存 API Key") {
-                        do {
-                            try APIKeyStore.save(apiKey)
-                            connectionStatus = apiKey.isEmpty ? "API Key 已删除" : "API Key 已保存到 Keychain"
-                        } catch { connectionStatus = error.localizedDescription }
+                    if provider != ModelProvider.ollama.rawValue {
+                        Button("保存 API Key") {
+                            do {
+                                try APIKeyStore.save(apiKey)
+                                connectionStatus = apiKey.isEmpty ? "API Key 已删除" : "API Key 已保存到 Keychain"
+                            } catch { connectionStatus = error.localizedDescription }
+                        }
                     }
                     Button(testing ? "测试中…" : "测试连接") {
                         testing = true
                         connectionStatus = nil
-                        let config = ModelConfiguration(baseURL: baseURL, model: model, apiKey: apiKey)
+                        let config = ModelConfiguration(
+                            baseURL: baseURL,
+                            model: model,
+                            apiKey: apiKey,
+                            provider: ModelProvider(rawValue: provider) ?? .openAICompatible
+                        )
                         Task {
                             defer { testing = false }
                             do {

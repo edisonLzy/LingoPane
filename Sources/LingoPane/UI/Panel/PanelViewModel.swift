@@ -5,6 +5,7 @@ import Foundation
 public final class PanelViewModel: ObservableObject, Identifiable {
     public enum Phase {
         case loading
+        case streaming(TranslationResult)
         case ready(TranslationResult)
         case failed(PanelFailure)
     }
@@ -13,6 +14,7 @@ public final class PanelViewModel: ObservableObject, Identifiable {
     @Published public var source: String
     @Published public var classification: Classification
     @Published public var phase: Phase = .loading
+    @Published public private(set) var isReasoning = false
     @Published public var scene: ExpressionScene = .general
     @Published public var deepLoading = false
     @Published public var deepFailure: String?
@@ -46,8 +48,15 @@ public final class PanelViewModel: ObservableObject, Identifiable {
     }
 
     public var result: TranslationResult? {
-        if case .ready(let result) = phase { return result }
-        return nil
+        switch phase {
+        case .streaming(let result), .ready(let result): result
+        case .loading, .failed: nil
+        }
+    }
+
+    public var isStreaming: Bool {
+        if case .streaming = phase { return true }
+        return false
     }
 
     public func start(source: String, classification: Classification) {
@@ -66,11 +75,25 @@ public final class PanelViewModel: ObservableObject, Identifiable {
         resetAnnotations()
         showNestedStructures = false
         selectedAlternativeID = nil
+        isReasoning = false
+    }
+
+
+    public func showReasoning() {
+        guard case .loading = phase, !isReasoning else { return }
+        isReasoning = true
+    }
+
+    public func stream(_ result: TranslationResult) {
+        guard !result.primaryResult.isEmpty else { return }
+        isReasoning = false
+        phase = .streaming(result)
     }
 
     public func succeed(_ result: TranslationResult) {
         source = result.source
         classification = Classification(language: result.language, kind: result.kind)
+        isReasoning = false
         phase = .ready(result)
         if result.kind == .sentence, UserDefaults.standard.bool(forKey: "expandGrammarByDefault") {
             isExpanded = true
@@ -78,6 +101,7 @@ public final class PanelViewModel: ObservableObject, Identifiable {
     }
 
     public func fail(_ failure: PanelFailure) {
+        isReasoning = false
         phase = .failed(failure)
     }
 

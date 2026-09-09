@@ -1,8 +1,23 @@
 import Foundation
 
+public enum TranslationProgress: Sendable {
+    case reasoning
+    case partial(TranslationResult)
+}
+
+public typealias TranslationProgressHandler = @MainActor @Sendable (TranslationProgress) -> Void
+
 public protocol TranslationService: Sendable {
     func analyze(_ text: String, classification: Classification) async throws -> TranslationResult
     func analyze(_ text: String, classification: Classification, scene: ExpressionScene, deep: Bool, refresh: Bool) async throws -> TranslationResult
+    func analyze(
+        _ text: String,
+        classification: Classification,
+        scene: ExpressionScene,
+        deep: Bool,
+        refresh: Bool,
+        progress: TranslationProgressHandler?
+    ) async throws -> TranslationResult
 }
 
 public enum ExpressionScene: String, Codable, CaseIterable, Sendable {
@@ -15,6 +30,17 @@ public enum ExpressionScene: String, Codable, CaseIterable, Sendable {
 public extension TranslationService {
     func analyze(_ text: String, classification: Classification, scene: ExpressionScene, deep: Bool, refresh: Bool) async throws -> TranslationResult {
         try await analyze(text, classification: classification)
+    }
+
+    func analyze(
+        _ text: String,
+        classification: Classification,
+        scene: ExpressionScene,
+        deep: Bool,
+        refresh: Bool,
+        progress: TranslationProgressHandler?
+    ) async throws -> TranslationResult {
+        try await analyze(text, classification: classification, scene: scene, deep: deep, refresh: refresh)
     }
 }
 

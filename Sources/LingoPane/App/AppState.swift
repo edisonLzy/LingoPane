@@ -96,7 +96,19 @@ public final class AppState: ObservableObject {
                 }
             }
             do {
-                let result = try await service.analyze(text, classification: classification, scene: scene, deep: false, refresh: refresh)
+                let result = try await service.analyze(
+                    text,
+                    classification: classification,
+                    scene: scene,
+                    deep: false,
+                    refresh: refresh
+                ) { [weak self, weak model] progress in
+                    guard let self, let model, self.requestIDs[model.id] == requestID else { return }
+                    switch progress {
+                    case .reasoning: model.showReasoning()
+                    case .partial(let result): model.stream(result)
+                    }
+                }
                 guard !Task.isCancelled, let self, let model, self.requestIDs[model.id] == requestID else { return }
                 model.succeed(result)
                 self.record(result)
@@ -113,24 +125,27 @@ public final class AppState: ObservableObject {
     }
 
     private func loadDeep(_ model: PanelViewModel) {
-        guard !model.deepLoading, !model.deepReady, let base = model.result else { return }
+        guard !model.isStreaming, !model.deepLoading, !model.deepReady, let base = model.result else { return }
         model.deepLoading = true
         model.deepFailure = nil
         let scene = model.scene
         let classification = model.classification
         model.deepTask = Task { [weak self, weak model, service] in
             do {
-                let deep = try await service.analyze(base.source, classification: classification, scene: scene, deep: true, refresh: false)
+                let deep = try await service.analyze(
+                    base.source,
+                    classification: classification,
+                    scene: scene,
+                    deep: true,
+                    refresh: false
+                ) { [weak model] progress in
+                    guard let model, model.deepLoading, model.source == base.source else { return }
+                    if case .partial(let partial) = progress {
+                        model.phase = .ready(Self.merge(base: base, deep: partial))
+                    }
+                }
                 guard !Task.isCancelled, let model else { return }
-                let merged = TranslationResult(
-                    source: base.source, language: base.language, kind: base.kind, primaryResult: base.primaryResult,
-                    ipa: deep.ipa ?? base.ipa, meanings: deep.meanings.isEmpty ? base.meanings : deep.meanings,
-                    contextMeaning: deep.contextMeaning ?? base.contextMeaning, alternatives: deep.alternatives,
-                    keywordMappings: deep.keywordMappings, expressionNotes: deep.expressionNotes,
-                    collocations: deep.collocations, wordForms: deep.wordForms, examples: deep.examples,
-                    sentenceSkeleton: deep.sentenceSkeleton ?? base.sentenceSkeleton,
-                    annotations: deep.annotations, clauses: deep.clauses, grammarPoints: deep.grammarPoints,
-                    translationNote: deep.translationNote, confusingWords: deep.confusingWords)
+                let merged = Self.merge(base: base, deep: deep)
                 model.phase = .ready(merged)
                 model.deepReady = true
                 model.deepLoading = false
@@ -141,6 +156,19 @@ public final class AppState: ObservableObject {
                 model.deepFailure = error.localizedDescription
             }
         }
+    }
+
+    private static func merge(base: TranslationResult, deep: TranslationResult) -> TranslationResult {
+        TranslationResult(
+            source: base.source, language: base.language, kind: base.kind, primaryResult: base.primaryResult,
+            ipa: deep.ipa ?? base.ipa, meanings: deep.meanings.isEmpty ? base.meanings : deep.meanings,
+            contextMeaning: deep.contextMeaning ?? base.contextMeaning, alternatives: deep.alternatives,
+            keywordMappings: deep.keywordMappings, expressionNotes: deep.expressionNotes,
+            collocations: deep.collocations, wordForms: deep.wordForms, examples: deep.examples,
+            sentenceSkeleton: deep.sentenceSkeleton ?? base.sentenceSkeleton,
+            annotations: deep.annotations, clauses: deep.clauses, grammarPoints: deep.grammarPoints,
+            translationNote: deep.translationNote, confusingWords: deep.confusingWords
+        )
     }
 
     public func cancelTranslation(for id: UUID) {

@@ -14,4 +14,7 @@
 <key>NSHighResolutionCapable</key><true/>
 <key>NSPrincipalClass</key><string>NSApplication</string>
 <key>NSAccessibilityUsageDescription</key><string>LingoPane 仅在您触发翻译时读取当前选中文字及其位置，用于显示翻译面板。</string>
+<key>NSAppTransportSecurity</key><dict>
+<key>NSAllowsLocalNetworking</key><true/>
+</dict>
 </dict></plist>
