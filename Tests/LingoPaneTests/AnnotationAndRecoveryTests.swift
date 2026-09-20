@@ -74,6 +74,22 @@ final class AnnotationAndRecoveryTests: XCTestCase {
     }
 
     @MainActor
+    func testLongOriginalSentenceContributesItsFullWrappedHeight() {
+        let source = "Large language models (LLMs) are designed to produce text for humans to read. When you need a model to make a judgment that your code will consume, that creates a mismatch: you are coercing a text-generation system into outputting structured decisions, then parsing the results back into something your code can depend on."
+        let text = AnnotationTextView(frame: .zero)
+        text.textContainerInset = NSSize(width: 1, height: 3)
+        text.textContainer?.lineFragmentPadding = 0
+        text.textContainer?.lineBreakMode = .byWordWrapping
+        text.textContainer?.widthTracksTextView = true
+        text.configure(source: source, annotations: [], includeNested: false)
+
+        let height = text.measuredHeight(constrainedTo: 320)
+
+        XCTAssertGreaterThan(height, 140, "The panel must reserve every wrapped line instead of clipping the source to one line")
+        XCTAssertEqual(text.frame.height, height)
+    }
+
+    @MainActor
     func testTransientMouseExitDoesNotFlickerAnnotationCard() async throws {
         let model = PanelViewModel(source: "A sentence.", classification: Classification(language: .english, kind: .sentence))
         let id = UUID()

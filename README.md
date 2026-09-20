@@ -102,6 +102,11 @@ ollama pull qwen3.5:4b
 | OpenAI | `https://api.openai.com/v1` | `gpt-4o` |
 | Ollama（本地） | `http://127.0.0.1:11434` | `qwen3.5:4b` |
 
+LingoPane 针对 `qwen3.5:4b` 使用确定性较高的结构化输出配置：关闭 thinking，按内容类型传入
+JSON Schema，并设置 `temperature=0.2`、`top_p=0.8`、`top_k=20`、`num_ctx=4096`。
+Fast Analyze 最多生成 384 tokens，Deep Analyze 最多生成 1024 tokens；模型在请求后保留 10 分钟，
+以减少连续划词时的重复加载延迟。
+
 ### 连接测试
 
 点击「测试连接」使用当前配置发送一次 hello 翻译请求，会消耗少量模型额度，不会自动保存密钥。

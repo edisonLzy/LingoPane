@@ -68,7 +68,7 @@ public struct SettingsView: View {
                 TextField("模型", text: $model)
                 TextField("Base URL", text: $baseURL)
                 if provider == ModelProvider.ollama.rawValue {
-                    Text("本地 Ollama 无需 API Key；默认翻译关闭思考，展开学习分析时启用。")
+                    Text("本地 Ollama 无需 API Key；翻译和学习分析均使用结构化输出并关闭思考。")
                         .font(.caption).foregroundStyle(.secondary)
                 } else {
                     SecureField("API Key", text: $apiKey)

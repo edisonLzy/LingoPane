@@ -31,9 +31,24 @@ private final class StubProtocol: URLProtocol, @unchecked Sendable {
                 return data
             } ?? Data()
             let body = try? JSONSerialization.jsonObject(with: bodyData) as? [String: Any]
-            let validRequest = body?["format"] as? String == "json"
+            let format = body?["format"] as? [String: Any]
+            let properties = format?["properties"] as? [String: Any]
+            let options = body?["options"] as? [String: Any]
+            let messages = body?["messages"] as? [[String: String]]
+            let isDeepRequest = messages?.first?["content"]?.contains("Provide detailed learning information") == true
+            let userObject = messages?.last?["content"]?.data(using: .utf8).flatMap {
+                try? JSONSerialization.jsonObject(with: $0) as? [String: String]
+            }
+            let validRequest = format?["type"] as? String == "object"
+                && properties?["primaryResult"] != nil
                 && body?["think"] as? Bool == false
                 && body?["keep_alive"] as? String == "10m"
+                && options?["temperature"] as? Double == 0.2
+                && options?["top_p"] as? Double == 0.8
+                && options?["top_k"] as? Int == 20
+                && options?["num_ctx"] as? Int == 4096
+                && options?["num_predict"] as? Int == (isDeepRequest ? 1024 : 384)
+                && userObject?["sourceText"] == "hello"
                 && request.value(forHTTPHeaderField: "Authorization") == nil
             let data = try! JSONSerialization.data(withJSONObject: [
                 "message": ["content": validRequest ? valid : "invalid"],
@@ -206,11 +221,28 @@ final class NetworkingTests: XCTestCase {
         let service = OpenAITranslationService(
             configuration: ModelConfiguration(
                 baseURL: "http://127.0.0.1:11434/v1",
-                model: "qwen3:4b",
+                model: "qwen3.5:4b",
                 apiKey: "",
                 provider: .ollama
             ),
             session: URLSession(configuration: config)
+        )
+        let result = try await service.analyze("hello", classification: classification)
+        XCTAssertEqual(result.primaryResult, "你好")
+    }
+
+    func testLocalOllamaDeepAnalysisKeepsThinkingDisabled() async throws {
+        let config = URLSessionConfiguration.ephemeral
+        config.protocolClasses = [StubProtocol.self]
+        let service = OpenAITranslationService(
+            configuration: ModelConfiguration(
+                baseURL: "http://127.0.0.1:11434",
+                model: "qwen3.5:4b",
+                apiKey: "",
+                provider: .ollama
+            ),
+            session: URLSession(configuration: config),
+            deep: true
         )
         let result = try await service.analyze("hello", classification: classification)
         XCTAssertEqual(result.primaryResult, "你好")

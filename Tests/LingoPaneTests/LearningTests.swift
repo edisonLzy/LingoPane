@@ -13,6 +13,22 @@ final class LearningTests: XCTestCase {
         XCTAssertEqual(result.clauses.count, 1)
     }
 
+    func testDeepDecodingRepairsModelAnnotationOffsetsFromExactText() throws {
+        let source = "👩🏽‍💻 The café works."
+        let content = #"{"primaryResult":"这家咖啡馆可以营业。","annotations":[{"text":"café","start":99,"end":103,"role":"subject","explanation":"主语"}]}"#
+        let data = try JSONSerialization.data(withJSONObject: ["choices": [["message": ["content": content]]]])
+        let result = try OpenAITranslationService.decode(
+            data,
+            source: source,
+            classification: Classification(language: .english, kind: .sentence)
+        )
+        let annotation = try XCTUnwrap(result.annotations.first)
+        let range = try XCTUnwrap(source.range(of: "café"))
+        XCTAssertEqual(annotation.start, source.distance(from: source.startIndex, to: range.lowerBound))
+        XCTAssertEqual(annotation.end, source.distance(from: source.startIndex, to: range.upperBound))
+        XCTAssertTrue(annotation.isValid(in: source))
+    }
+
     func testCachePersistsExpiresAndClears() async throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
         defer { try? FileManager.default.removeItem(at: directory) }
