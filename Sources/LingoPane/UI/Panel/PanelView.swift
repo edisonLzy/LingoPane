@@ -145,7 +145,7 @@ public struct PanelView: View {
     private var sourceSection: some View {
         PanelSection(model.classification.language == .chinese ? "原文" : "原句") {
             HStack(alignment: .top, spacing: 10) {
-                AnnotatedSentenceView(model: model)
+                sourceText
                     .frame(maxWidth: .infinity, alignment: .leading)
                     .layoutPriority(1)
 
@@ -162,6 +162,21 @@ public struct PanelView: View {
                let annotation = model.result?.annotations.first(where: { $0.id == model.activeAnnotationID && $0.isValid(in: model.source) }) {
                 AnnotationCard(annotation: annotation, pinned: model.pinnedAnnotationID == annotation.id)
             }
+        }
+    }
+
+    @ViewBuilder
+    private var sourceText: some View {
+        if model.classification.language == .chinese {
+            Text(model.source)
+                .font(.system(size: 14))
+                .foregroundStyle(.white)
+                .lineSpacing(5)
+                .textSelection(.enabled)
+                .fixedSize(horizontal: false, vertical: true)
+                .accessibilityLabel("原文")
+        } else {
+            AnnotatedSentenceView(model: model)
         }
     }
 
