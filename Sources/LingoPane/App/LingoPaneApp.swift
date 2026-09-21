@@ -10,6 +10,14 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             AppState.shared.triggerSelectionTranslation()
         }
 
+        let isPreview = CommandLine.arguments.contains { $0.hasPrefix("--preview") }
+        if !isPreview && !UserDefaults.standard.bool(forKey: "hasShownInitialLaunchUI") {
+            UserDefaults.standard.set(true, forKey: "hasShownInitialLaunchUI")
+            DispatchQueue.main.async {
+                StatusBarController.shared.showPopover()
+            }
+        }
+
         if CommandLine.arguments.contains("--preview-multi") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 let samples: [(String, NSPoint)] = [
@@ -44,6 +52,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
                 state.translate("The feature that we discussed yesterday has been implemented.")
             }
         }
+    }
+
+    func applicationShouldHandleReopen(_ sender: NSApplication, hasVisibleWindows flag: Bool) -> Bool {
+        StatusBarController.shared.showPopover()
+        return true
     }
 
     func applicationWillTerminate(_ notification: Notification) {

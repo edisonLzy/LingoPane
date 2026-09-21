@@ -114,7 +114,7 @@ public struct QuickInputView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
-                Text("⌥ Space  划词翻译")
+                Text("\(HotKeyPreferences.current.displayName)  划词翻译")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
             }

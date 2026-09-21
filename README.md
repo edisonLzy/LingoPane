@@ -20,7 +20,7 @@ macOS 14+ 菜单栏翻译工具，融合原生 Apple 设计与 AI 智能分析�
 - **无障碍支持**：Reduce Motion 尊重、系统对比度适配
 
 ### 高效操作
-- **全局快捷键**：`⌥ Space` 快速划词翻译
+- **全局快捷键**：默认 `⌥ Space`，可在设置中录入任意带修饰键的组合
 - **Pin 面板**：固定结果不消失，支持多面板排列
 - **翻译历史**：本地保存、按期限自动清理、搜索筛选
 - **一键发音**：英文 TTS，支持 en-US / en-GB
@@ -86,6 +86,7 @@ SIGNING_IDENTITY="Apple Development: Your Name" ./scripts/build-app.sh
 2. 填写 OpenAI-compatible 服务的 Base URL（以 `/v1` 结尾）
 3. 选择或填写模型名称
 4. 输入 API Key，点击「保存 API Key」
+5. 在“翻译历史与 Vault”中确认或选择 LingoPane 的 Obsidian 存储目录
 
 使用 Ollama 时，在“服务商”中选择“Ollama（本地）”即可，无需填写 API Key。默认地址为
 `http://127.0.0.1:11434`；请确保 Ollama 已启动并已下载所选模型，例如：
@@ -117,7 +118,7 @@ Fast Analyze 最多生成 384 tokens，Deep Analyze 最多生成 1024 tokens；�
 
 | 快捷键 | 功能 |
 |--------|------|
-| `⌥ Space` | 全局划词翻译 |
+| `⌥ Space` | 全局划词翻译（默认，可自定义） |
 | `Esc` | 关闭临时面板 |
 | `Tab` / `Shift+Tab` | 切换标注焦点 |
 | `Return` / `Space` | 固定/取消标注 |
@@ -181,7 +182,7 @@ LingoPane/
 - **Fast/Deep 分级缓存**：按原文、分类、场景、模型隔离
 - **保留期限**：7 天
 - **最大条目**：200 项
-- **历史保留**：默认 90 天，最多 100 条
+- **翻译历史**：每个唯一知识项保存为一份 Obsidian Markdown，并生成每日遇见日志
 
 ### 网络配置
 
@@ -195,7 +196,8 @@ LingoPane/
 |------|----------|
 | API Key | macOS Keychain |
 | 设置 | UserDefaults |
-| 历史/缓存 | `~/Library/Application Support/LingoPane/` |
+| 翻译历史 | 设置中选择的 Obsidian 目录（默认 `/Users/zhiyu/Desktop/个人/obsidian-vault/英语/lingo-pane`） |
+| 分析缓存 | `~/Library/Application Support/LingoPane/` |
 
 ## 相关文档
 

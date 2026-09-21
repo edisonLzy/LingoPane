@@ -244,11 +244,54 @@ public struct HistoryItem: Identifiable, Codable, Sendable {
     public let id: UUID
     public let result: TranslationResult
     public let createdAt: Date
+    public let updatedAt: Date
+    public let lastSeenAt: Date
+    public let encounterCount: Int
+    public let scenes: [ExpressionScene]
+    public let lastScene: ExpressionScene
 
-    public init(id: UUID = UUID(), result: TranslationResult, createdAt: Date = .now) {
+    public init(
+        id: UUID = UUID(),
+        result: TranslationResult,
+        createdAt: Date = .now,
+        updatedAt: Date? = nil,
+        lastSeenAt: Date? = nil,
+        encounterCount: Int = 1,
+        scenes: [ExpressionScene] = [.general],
+        lastScene: ExpressionScene = .general
+    ) {
         self.id = id
         self.result = result
         self.createdAt = createdAt
+        self.updatedAt = updatedAt ?? createdAt
+        self.lastSeenAt = lastSeenAt ?? createdAt
+        self.encounterCount = max(1, encounterCount)
+        self.scenes = scenes.isEmpty ? [lastScene] : scenes
+        self.lastScene = lastScene
+    }
+
+    public var searchableText: String {
+        var values = [
+            result.source,
+            result.primaryResult,
+            result.ipa ?? "",
+            result.contextMeaning ?? "",
+            result.sentenceSkeleton ?? "",
+            result.translationNote ?? "",
+            scenes.map(\.rawValue).joined(separator: " ")
+        ]
+        values.append(contentsOf: result.meanings.flatMap { [$0.partOfSpeech, $0.meaning] })
+        values.append(contentsOf: result.alternatives.flatMap { [$0.label, $0.text, $0.note] })
+        values.append(contentsOf: result.keywordMappings.flatMap { [$0.source, $0.target] })
+        values.append(contentsOf: result.expressionNotes)
+        values.append(contentsOf: result.collocations.flatMap { [$0.phrase, $0.meaning] })
+        values.append(contentsOf: result.confusingWords?.flatMap { [$0.phrase, $0.meaning] } ?? [])
+        values.append(contentsOf: result.wordForms)
+        values.append(contentsOf: result.examples.flatMap { [$0.english, $0.chinese] })
+        values.append(contentsOf: result.annotations.flatMap { [$0.text, $0.role.title, $0.explanation] })
+        values.append(contentsOf: result.clauses.flatMap { [$0.text, $0.type, $0.explanation] })
+        values.append(contentsOf: result.grammarPoints)
+        return values.joined(separator: "\n")
     }
 }
 

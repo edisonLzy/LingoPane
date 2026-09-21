@@ -1,3 +1,4 @@
+import AppKit
 import XCTest
 @testable import LingoPane
 
@@ -48,13 +49,97 @@ final class LearningTests: XCTestCase {
         XCTAssertNil(cleared)
     }
 
-    func testHistoryRetentionAndPermanentMode() {
-        let now = Date()
-        let result = TranslationResult(source: "hello", language: .english, kind: .word, primaryResult: "你好")
-        let items = [HistoryItem(result: result, createdAt: now),
-            HistoryItem(result: result, createdAt: now.addingTimeInterval(-40 * 86400))]
-        XCTAssertEqual(HistoryStore.prune(items, now: now, days: 30).count, 1)
-        XCTAssertEqual(HistoryStore.prune(items, now: now, days: 0).count, 2)
+    func testVaultHistoryRoundTripPreservesUserNotesAndDailyEncounter() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = VaultHistoryStore(rootURL: directory, movesDeletedItemsToTrash: false)
+        let now = Date(timeIntervalSince1970: 1_700_000_000)
+        let result = TranslationResult(
+            source: "architecture",
+            language: .english,
+            kind: .word,
+            primaryResult: "架构",
+            collocations: [Collocation(phrase: "software architecture", meaning: "软件架构")]
+        )
+        let item = HistoryItem(
+            result: result,
+            createdAt: now,
+            updatedAt: now,
+            lastSeenAt: now,
+            encounterCount: 2,
+            scenes: [.general, .technical],
+            lastScene: .technical
+        )
+
+        let url = try store.save(item)
+        try store.appendEncounter(for: item, at: now)
+        var note = try String(contentsOf: url, encoding: .utf8)
+        note = note.replacingOccurrences(
+            of: VaultHistoryStore.userStart,
+            with: VaultHistoryStore.userStart + "\n重点复习。"
+        )
+        try Data(note.utf8).write(to: url, options: .atomic)
+        _ = try store.save(item)
+
+        let loaded = try XCTUnwrap(store.load().first)
+        XCTAssertEqual(loaded.id, item.id)
+        XCTAssertEqual(loaded.result.primaryResult, "架构")
+        XCTAssertEqual(loaded.encounterCount, 2)
+        XCTAssertEqual(loaded.scenes, [.general, .technical])
+        XCTAssertTrue(loaded.searchableText.contains("software architecture"))
+        let savedNote = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(savedNote.contains("重点复习。"))
+        XCTAssertTrue(savedNote.contains("%%\nlingopane-payload-v1:start"))
+        XCTAssertFalse(savedNote.contains("<!-- lingopane-payload-v1:start -->"))
+        XCTAssertEqual(try FileManager.default.contentsOfDirectory(at: store.dailyURL, includingPropertiesForKeys: nil).count, 1)
+
+        try store.delete(id: item.id)
+        XCTAssertTrue(store.load().isEmpty)
+    }
+
+    func testVaultHistoryLoadMigratesLegacyPayloadWithoutRewritingNote() throws {
+        let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
+        defer { try? FileManager.default.removeItem(at: directory) }
+        let store = VaultHistoryStore(rootURL: directory, movesDeletedItemsToTrash: false)
+        let item = HistoryItem(
+            result: TranslationResult(
+                source: "legacy note",
+                language: .english,
+                kind: .word,
+                primaryResult: "旧笔记"
+            )
+        )
+        let url = try store.save(item)
+        var note = try String(contentsOf: url, encoding: .utf8)
+        note = note.replacingOccurrences(
+            of: VaultHistoryStore.payloadStart,
+            with: "<!-- lingopane-payload-v1:start -->"
+        )
+        note = note.replacingOccurrences(
+            of: VaultHistoryStore.payloadEnd,
+            with: "<!-- lingopane-payload-v1:end -->"
+        )
+        note = "保留这段手工内容。\n" + note
+        try Data(note.utf8).write(to: url, options: .atomic)
+
+        let loaded = try XCTUnwrap(store.load().first)
+        XCTAssertEqual(loaded.id, item.id)
+
+        let migrated = try String(contentsOf: url, encoding: .utf8)
+        XCTAssertTrue(migrated.hasPrefix("保留这段手工内容。\n"))
+        XCTAssertTrue(migrated.contains(VaultHistoryStore.payloadStart))
+        XCTAssertTrue(migrated.contains(VaultHistoryStore.payloadEnd))
+        XCTAssertFalse(migrated.contains("<!-- lingopane-payload-v1:start -->"))
+        XCTAssertFalse(migrated.contains("<!-- lingopane-payload-v1:end -->"))
+    }
+
+    func testHotKeyDisplayNameUsesMacModifierOrder() {
+        let shortcut = HotKeyShortcut(
+            keyCode: 0,
+            modifierFlags: NSEvent.ModifierFlags([.command, .option, .shift]).rawValue,
+            keyLabel: "A"
+        )
+        XCTAssertEqual(shortcut.displayName, "⌥⇧⌘A")
     }
 
     func testArrangementUsesColumnsAndNeverOverflows() throws {

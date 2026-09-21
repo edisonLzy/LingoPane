@@ -4,6 +4,7 @@ public struct HistoryView: View {
     @ObservedObject var state: AppState
     @State private var query = ""
     @State private var language: Language?
+    @State private var kind: ContentKind?
 
     public init(state: AppState) {
         self.state = state
@@ -12,10 +13,10 @@ public struct HistoryView: View {
     private var filtered: [HistoryItem] {
         state.history.filter { item in
             let matchesQuery = query.isEmpty
-                || item.result.source.localizedCaseInsensitiveContains(query)
-                || item.result.primaryResult.localizedCaseInsensitiveContains(query)
+                || item.searchableText.localizedCaseInsensitiveContains(query)
             let matchesLanguage = language == nil || item.result.language == language
-            return matchesQuery && matchesLanguage
+            let matchesKind = kind == nil || item.result.kind == kind
+            return matchesQuery && matchesLanguage && matchesKind
         }
     }
 
@@ -31,6 +32,20 @@ public struct HistoryView: View {
                 }
                 .labelsHidden()
                 .frame(width: 120)
+                Picker("类型", selection: $kind) {
+                    Text("全部类型").tag(ContentKind?.none)
+                    Text("中文表达").tag(ContentKind?.some(.chinese))
+                    Text("单词/短语").tag(ContentKind?.some(.word))
+                    Text("英文句子").tag(ContentKind?.some(.sentence))
+                }
+                .labelsHidden()
+                .frame(width: 120)
+                Button {
+                    state.reloadHistory()
+                } label: {
+                    Image(systemName: "arrow.clockwise")
+                }
+                .help("从 Vault 重新载入")
             }
             .padding(14)
 
@@ -52,9 +67,16 @@ public struct HistoryView: View {
                         VStack(alignment: .leading, spacing: 4) {
                             Text(item.result.source).lineLimit(1).fontWeight(.medium)
                             Text(item.result.primaryResult).lineLimit(1).foregroundStyle(.secondary)
+                            HStack(spacing: 6) {
+                                Text(item.result.kind.shortTitle)
+                                Text(item.lastScene.rawValue)
+                                if item.encounterCount > 1 { Text("遇见 \(item.encounterCount) 次") }
+                            }
+                            .font(.caption2)
+                            .foregroundStyle(.tertiary)
                         }
                         Spacer()
-                        Text(item.createdAt, style: .relative)
+                        Text(item.lastSeenAt, style: .relative)
                             .font(.caption)
                             .foregroundStyle(.tertiary)
                         Button {
@@ -76,6 +98,7 @@ public struct HistoryView: View {
                 }
             }
         }
+        .onAppear { state.reloadHistory() }
         .frame(width: 650, height: 470)
     }
 }

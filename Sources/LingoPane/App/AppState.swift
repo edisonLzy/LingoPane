@@ -111,7 +111,7 @@ public final class AppState: ObservableObject {
                 }
                 guard !Task.isCancelled, let self, let model, self.requestIDs[model.id] == requestID else { return }
                 model.succeed(result)
-                self.record(result)
+                self.record(result, scene: scene, countsEncounter: true)
                 if model.isExpanded { self.loadDeep(model) }
             } catch is CancellationError {
                 return
@@ -149,7 +149,7 @@ public final class AppState: ObservableObject {
                 model.phase = .ready(merged)
                 model.deepReady = true
                 model.deepLoading = false
-                self?.record(merged)
+                self?.record(merged, scene: scene, countsEncounter: false)
             } catch {
                 guard !Task.isCancelled, let model else { return }
                 model.deepLoading = false
@@ -194,22 +194,31 @@ public final class AppState: ObservableObject {
     }
 
     public func reopen(_ item: HistoryItem) {
-        translate(item.result.source)
+        translate(
+            item.result.source,
+            classificationOverride: Classification(language: item.result.language, kind: item.result.kind),
+            scene: item.lastScene
+        )
     }
 
     public func deleteHistory(id: UUID) {
         history.removeAll { $0.id == id }
-        if persistsHistory { HistoryStore.save(history) }
+        if persistsHistory { HistoryStore.delete(id: id) }
     }
 
-    public func pruneHistory() {
-        history = HistoryStore.prune(history)
-        if persistsHistory { HistoryStore.save(history) }
+    public func reloadHistory() {
+        guard persistsHistory else { return }
+        history = HistoryStore.load()
+    }
+
+    public func configureVaultPath(_ path: String) {
+        HistoryStore.setConfiguredPath(path)
+        reloadHistory()
     }
 
     public func clearHistory() {
         history.removeAll()
-        if persistsHistory { HistoryStore.save(history) }
+        if persistsHistory { HistoryStore.clear() }
     }
 
     public func copy(_ text: String) {
@@ -217,48 +226,33 @@ public final class AppState: ObservableObject {
         NSPasteboard.general.setString(text, forType: .string)
     }
 
-    private func record(_ result: TranslationResult) {
+    private func record(_ result: TranslationResult, scene: ExpressionScene, countsEncounter: Bool) {
         guard HistoryStore.isEnabled else { return }
-        history = HistoryStore.prune(history)
-        history.removeAll { $0.result.source == result.source }
-        history.insert(HistoryItem(result: result), at: 0)
-        history = Array(history.prefix(100))
-        if persistsHistory { HistoryStore.save(history) }
-    }
-}
-
-enum HistoryStore {
-    static var isEnabled: Bool { UserDefaults.standard.object(forKey: "saveHistory") == nil || UserDefaults.standard.bool(forKey: "saveHistory") }
-    private static let key = "LingoPane.translationHistory.v1"
-    private static var store: SnapshotStore<[HistoryItem]> {
-        SnapshotStore(url: URL.applicationSupportDirectory.appendingPathComponent("LingoPane/history-v2.json"))
-    }
-
-    static func load() -> [HistoryItem] {
-        if let saved = store.load() {
-            let items = prune(saved)
-            save(items)
-            return items
+        let now = Date()
+        let normalizedSource = result.source.trimmingCharacters(in: .whitespacesAndNewlines)
+            .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+        let existing = history.first { item in
+            item.result.language == result.language
+                && item.result.kind == result.kind
+                && item.result.source.trimmingCharacters(in: .whitespacesAndNewlines)
+                    .folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current) == normalizedSource
         }
-        guard let data = UserDefaults.standard.data(forKey: key),
-              let legacy = try? JSONDecoder().decode([HistoryItem].self, from: data) else { return [] }
-        let items = prune(legacy)
-        do {
-            try store.save(items)
-            UserDefaults.standard.removeObject(forKey: key)
-        } catch {
-            // Keep the legacy copy until migration has succeeded.
-        }
-        return items
-    }
 
-    static func prune(_ items: [HistoryItem], now: Date = .now, days: Int? = nil) -> [HistoryItem] {
-        let retention = days ?? (UserDefaults.standard.object(forKey: "historyRetention") == nil ? 90 : UserDefaults.standard.integer(forKey: "historyRetention"))
-        return Array(items.filter { retention <= 0 || now.timeIntervalSince($0.createdAt) < Double(retention) * 86400 }.prefix(100))
-    }
-
-    static func save(_ items: [HistoryItem]) {
-        do { try store.save(items) }
-        catch { Diagnostics.storageFailure("history_write") }
+        var scenes = existing?.scenes ?? []
+        if !scenes.contains(scene) { scenes.append(scene) }
+        let item = HistoryItem(
+            id: existing?.id ?? UUID(),
+            result: result,
+            createdAt: existing?.createdAt ?? now,
+            updatedAt: now,
+            lastSeenAt: countsEncounter ? now : (existing?.lastSeenAt ?? now),
+            encounterCount: (existing?.encounterCount ?? 0) + (countsEncounter ? 1 : 0),
+            scenes: scenes,
+            lastScene: scene
+        )
+        history.removeAll { $0.id == item.id }
+        history.append(item)
+        history.sort { $0.lastSeenAt > $1.lastSeenAt }
+        if persistsHistory { HistoryStore.save(item, recordEncounter: countsEncounter, at: now) }
     }
 }
