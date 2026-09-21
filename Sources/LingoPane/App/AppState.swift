@@ -7,7 +7,8 @@ public final class AppState: ObservableObject {
         let preview = CommandLine.arguments.contains(where: { $0.hasPrefix("--preview") })
         return AppState(
             service: preview ? MockTranslationService() : ConfiguredTranslationService(),
-            persistsHistory: !preview
+            persistsHistory: !preview,
+            initialHistory: CommandLine.arguments.contains("--preview-library") ? libraryPreviewItems : []
         )
     }()
 
@@ -22,10 +23,28 @@ public final class AppState: ObservableObject {
     private var requestIDs: [UUID: UUID] = [:]
     private var tasks: [UUID: Task<Void, Never>] = [:]
 
-    public init(service: any TranslationService, persistsHistory: Bool = true) {
+    public init(service: any TranslationService, persistsHistory: Bool = true, initialHistory: [HistoryItem] = []) {
         self.persistsHistory = persistsHistory
         self.service = service
-        self.history = persistsHistory ? HistoryStore.load() : []
+        self.history = persistsHistory ? HistoryStore.load() : initialHistory
+    }
+
+    private static var libraryPreviewItems: [HistoryItem] {
+        let samples: [(String, String, Language, ContentKind)] = [
+            ("serendipity", "不期而遇的美好；意外发现珍贵事物的机缘", .english, .word),
+            ("The feature that we discussed yesterday has been implemented.", "我们昨天讨论的功能已经实现了。", .english, .sentence),
+            ("我们可以先把这个作为兜底方案。", "We can keep this as a fallback for now.", .chinese, .chinese),
+            ("a little goes a long way", "一点点，也能带来很大的改变。", .english, .word),
+            ("Make room for what matters.", "为真正重要的事留出空间。", .english, .sentence)
+        ]
+        return samples.enumerated().map { index, sample in
+            HistoryItem(
+                result: TranslationResult(source: sample.0, language: sample.2, kind: sample.3, primaryResult: sample.1),
+                createdAt: Date.now.addingTimeInterval(-Double(index + 7) * 86400),
+                lastSeenAt: Date.now.addingTimeInterval(-Double(index) * 86400),
+                encounterCount: index + 1
+            )
+        }
     }
 
     public func translate(

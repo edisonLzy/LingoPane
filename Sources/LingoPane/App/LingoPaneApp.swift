@@ -3,6 +3,40 @@ import SwiftUI
 
 final class AppDelegate: NSObject, NSApplicationDelegate {
     func applicationDidFinishLaunching(_ notification: Notification) {
+        if let idx = CommandLine.arguments.firstIndex(of: "--render-library"), idx + 1 < CommandLine.arguments.count {
+            let outPath = CommandLine.arguments[idx + 1]
+            let state = AppState.shared
+            state.reloadHistory()
+            let hosting = NSHostingView(rootView: HistoryView(state: state, navigation: LibraryNavigation()).frame(width: 1120, height: 740))
+            hosting.frame = NSRect(x: 0, y: 0, width: 1120, height: 740)
+            hosting.layoutSubtreeIfNeeded()
+            if let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) {
+                hosting.cacheDisplay(in: hosting.bounds, to: rep)
+                if let png = rep.representation(using: .png, properties: [:]) {
+                    try? png.write(to: URL(fileURLWithPath: outPath))
+                }
+            }
+            exit(0)
+        }
+
+        if let idx = CommandLine.arguments.firstIndex(of: "--render-settings"), idx + 1 < CommandLine.arguments.count {
+            let outPath = CommandLine.arguments[idx + 1]
+            let state = AppState.shared
+            state.reloadHistory()
+            let nav = LibraryNavigation()
+            nav.page = .settings
+            let hosting = NSHostingView(rootView: HistoryView(state: state, navigation: nav).frame(width: 1120, height: 740))
+            hosting.frame = NSRect(x: 0, y: 0, width: 1120, height: 740)
+            hosting.layoutSubtreeIfNeeded()
+            if let rep = hosting.bitmapImageRepForCachingDisplay(in: hosting.bounds) {
+                hosting.cacheDisplay(in: hosting.bounds, to: rep)
+                if let png = rep.representation(using: .png, properties: [:]) {
+                    try? png.write(to: URL(fileURLWithPath: outPath))
+                }
+            }
+            exit(0)
+        }
+
         NSApp.setActivationPolicy(.accessory)
         let state = AppState.shared
         StatusBarController.shared.configure(state: state)
@@ -18,7 +52,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
             }
         }
 
-        if CommandLine.arguments.contains("--preview-multi") {
+        if CommandLine.arguments.contains("--preview-library") {
+            DispatchQueue.main.async {
+                HistoryWindowCoordinator.shared.show(state: state)
+            }
+        } else if CommandLine.arguments.contains("--preview-multi") {
             DispatchQueue.main.asyncAfter(deadline: .now() + 0.35) {
                 let samples: [(String, NSPoint)] = [
                     ("The feature that we discussed yesterday has been implemented.", NSPoint(x: 90, y: 900)),
@@ -68,9 +106,15 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
 struct LingoPaneApp: App {
     @NSApplicationDelegateAdaptor(AppDelegate.self) private var appDelegate
 
+    private let settingsNavigation: LibraryNavigation = {
+        let navigation = LibraryNavigation()
+        navigation.page = .settings
+        return navigation
+    }()
+
     var body: some Scene {
         Settings {
-            SettingsView(state: AppState.shared)
+            HistoryView(state: AppState.shared, navigation: settingsNavigation)
         }
     }
 }

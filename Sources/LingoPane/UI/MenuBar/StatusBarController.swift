@@ -85,54 +85,43 @@ public final class StatusBarController: NSObject {
 }
 
 @MainActor
-public final class SettingsWindowCoordinator: NSObject, NSWindowDelegate {
+public final class SettingsWindowCoordinator {
     public static let shared = SettingsWindowCoordinator()
-    private var window: NSWindow?
-
     public func show(state: AppState) {
-        if let window {
-            window.makeKeyAndOrderFront(nil)
-            NSApp.activate(ignoringOtherApps: true)
-            return
-        }
-        let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 620, height: 700),
-            styleMask: [.titled, .closable, .miniaturizable],
-            backing: .buffered,
-            defer: false
-        )
-        window.title = "LingoPane 设置"
-        window.contentView = NSHostingView(rootView: SettingsView(state: state))
-        window.center()
-        window.delegate = self
-        window.isReleasedWhenClosed = false
-        self.window = window
-        window.makeKeyAndOrderFront(nil)
-        NSApp.activate(ignoringOtherApps: true)
+        HistoryWindowCoordinator.shared.show(state: state, page: .settings)
     }
-
-    public func windowWillClose(_ notification: Notification) { window = nil }
 }
 
 @MainActor
 public final class HistoryWindowCoordinator: NSObject, NSWindowDelegate {
     public static let shared = HistoryWindowCoordinator()
     private var window: NSWindow?
+    private let navigation = LibraryNavigation()
 
-    public func show(state: AppState) {
+    public func show(state: AppState, page: LibraryPage = .history) {
+        navigation.page = page
         if let window {
             window.makeKeyAndOrderFront(nil)
             NSApp.activate(ignoringOtherApps: true)
             return
         }
         let window = NSWindow(
-            contentRect: NSRect(x: 0, y: 0, width: 650, height: 470),
-            styleMask: [.titled, .closable, .miniaturizable, .resizable],
+            contentRect: NSRect(x: 0, y: 0, width: 1120, height: 740),
+            styleMask: [.titled, .closable, .miniaturizable, .resizable, .fullSizeContentView],
             backing: .buffered,
             defer: false
         )
-        window.title = "翻译历史"
-        window.contentView = NSHostingView(rootView: HistoryView(state: state))
+        window.title = "LingoPane"
+        window.titlebarAppearsTransparent = true
+        window.toolbar = nil
+        window.titlebarSeparatorStyle = .none
+        window.titleVisibility = .hidden
+        window.isMovableByWindowBackground = true
+        window.minSize = NSSize(width: 1000, height: 680)
+        window.contentView = NSHostingView(rootView: HistoryView(state: state, navigation: navigation))
+        window.backgroundColor = .clear
+        window.isOpaque = false
+        window.hasShadow = true
         window.center()
         window.delegate = self
         window.isReleasedWhenClosed = false
