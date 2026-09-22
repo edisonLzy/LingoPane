@@ -21,6 +21,7 @@ macOS 14+ 菜单栏翻译工具，融合原生 Apple 设计与 AI 智能分析�
 
 ### 高效操作
 - **全局快捷键**：默认 `⌥ Space`，可在设置中录入任意带修饰键的组合
+- **语音输入**：按住 `⌥ V` 说话，菜单栏图标实时显示声音波形；松开后自动语音转文字并填入快速翻译框（可自定义）
 - **Pin 面板**：固定结果不消失，支持多面板排列
 - **翻译历史**：本地保存、按期限自动清理、搜索筛选
 - **一键发音**：英文 TTS，支持 en-US / en-GB
@@ -29,6 +30,7 @@ macOS 14+ 菜单栏翻译工具，融合原生 Apple 设计与 AI 智能分析�
 - **API Key 加密存储**：macOS Keychain 保护
 - **性能日志**：仅记录类别和耗时，不含原文或密钥
 - **透明磨砂玻璃**：尊重系统辅助功能偏好
+- **语音不落盘**：录音仅存在于内存，转写请求完成后即释放，不写入任何本地文件
 
 ## 系统要求
 
@@ -108,6 +110,24 @@ JSON Schema，并设置 `temperature=0.2`、`top_p=0.8`、`top_k=20`、`num_ctx=
 Fast Analyze 最多生成 384 tokens，Deep Analyze 最多生成 1024 tokens；模型在请求后保留 10 分钟，
 以减少连续划词时的重复加载延迟。
 
+### 语音输入（Speech-to-Text）
+
+语音识别复用上方“服务商与配置”的 Base URL 与 API Key，仅“识别模型 (STT)”单独配置，
+默认 `gemma4:e2b`（Ollama 官方库里最轻的音频输入模型，7.2GB）：
+
+```bash
+ollama pull gemma4:e2b
+```
+
+识别请求走 OpenAI 兼容端点 `POST /v1/chat/completions`，以 `input_audio` 内容块传入
+16kHz 单声道 WAV（Ollama 原生 `/api/chat` 会静默丢弃音频，故不使用）。
+gemma4 的音频编码上限约 30 秒，因此单次录音最长 29 秒后自动停止；不足 0.35 秒的按压视为误触。
+录音只在内存中处理，识别完成后立即释放，不会写入本地文件。
+
+首次使用语音输入时，系统会请求麦克风权限。授权提示归属于实际运行的进程：用
+`./scripts/build-app.sh` 生成的 `dist/LingoPane.app` 运行时归属于 LingoPane 本体；
+用 `swift run` 运行时会归属于终端 App，建议语音功能用 .app 验收。
+
 ### 连接测试
 
 点击「测试连接」使用当前配置发送一次 hello 翻译请求，会消耗少量模型额度，不会自动保存密钥。
@@ -119,6 +139,7 @@ Fast Analyze 最多生成 384 tokens，Deep Analyze 最多生成 1024 tokens；�
 | 快捷键 | 功能 |
 |--------|------|
 | `⌥ Space` | 全局划词翻译（默认，可自定义） |
+| `⌥ V`（按住） | 语音输入：按住录音、菜单栏显示波形，松开识别为文字（默认，可自定义） |
 | `Esc` | 关闭临时面板 |
 | `Tab` / `Shift+Tab` | 切换标注焦点 |
 | `Return` / `Space` | 固定/取消标注 |
@@ -150,13 +171,19 @@ LingoPane/
 │   ├── Models/                 # 领域模型
 │   │   └── TranslationModels.swift
 │   ├── Services/               # 核心服务
-│   │   ├── HotKeyManager.swift      # Carbon 全局快捷键
+│   │   ├── HotKeyManager.swift      # Carbon 全局快捷键（划词 + 语音长按）
 │   │   ├── LocalClassifier.swift    # 本地语言/类型识别
 │   │   ├── SelectionProvider.swift  # Accessibility 选区读取
 │   │   ├── SpeechService.swift      # 系统 TTS
+│   │   ├── VoiceInput/              # 语音输入
+│   │   │   ├── AudioCapture.swift        # 麦克风采集与 WAV 编码
+│   │   │   ├── AudioRecorder.swift       # AVAudioEngine 录音
+│   │   │   ├── WaveformRenderer.swift    # 菜单栏波形绘制
+│   │   │   └── VoiceInputController.swift # 长按编排与转写调度
 │   │   ├── TranslationService.swift # 服务协议
 │   │   └── Networking/
 │   │       ├── OpenAITranslationService.swift
+│   │       ├── SpeechToTextService.swift
 │   │       └── AnalysisCache.swift
 │   ├── UI/
 │   │   ├── Design/PanelStyle.swift    # 玻璃样式与控件

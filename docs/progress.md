@@ -249,3 +249,44 @@ Tests/LingoPaneTests/
 - 展开、折叠和窗口高度变化采用短弹簧或缓入缓出动画，说明卡柔和浮现。
 - 加载骨架使用低对比度扫光；图标按钮悬停时轻微放大。
 - 系统开启“减少动态效果”后，上述非必要动画均停用。
+
+## 13. 语音输入（2026-09-22）
+
+- `HotKeyManager` 重构为多注册表：同一 Carbon 事件处理器同时订阅
+  `kEventHotKeyPressed` 与 `kEventHotKeyReleased`，按 `EventHotKeyID` 路由到
+  划词（id 1）或语音（id 2）；新增 `VoiceHotKeyPreferences`，默认 `⌥V` 长按。
+- 新增 `Services/VoiceInput/`：
+  - `AudioCapture.swift`：锁保护的内存采集缓冲（48k→单声道 float、RMS 电平）与
+    `WAVEncoder`（box-average 重采样到 16kHz 单声道 16bit、手写 RIFF 头）。
+  - `AudioRecorder.swift`：`AVAudioEngine` input tap；`stop()` 排空缓冲编码为内存 WAV。
+  - `WaveformRenderer.swift`：电平→模板位图（14 根圆头竖条，66×18，2x 光栅）。
+  - `VoiceInputController.swift`：权限→录音→30fps 波形→松开转写→填入快速输入框；
+    <0.35s 视为误触，29s 自动停止（gemma4 音频编码 750×40ms≈30s 上限）。
+- 新增 `Networking/SpeechToTextService.swift`：复用翻译 Base URL/API Key，
+  模型走 `sttModel`（默认 `gemma4:e2b`）；走 OpenAI 兼容 `/v1/chat/completions`
+  `input_audio`（原生 `/api/chat` 会静默丢弃音频），Ollama 附带 `think:false`。
+- `StatusBarController` 录音期间把 status item 换成波形图并改为变宽，
+  转写期间显示闲置动画，结束恢复原图标。
+- 设置新增“语音输入”卡片（快捷键录制 + 识别模型）；`Info.plist` 增加
+  `NSMicrophoneUsageDescription`；`PanelFailure` 增加 `.microphonePermission`。
+- 音频只在内存中流转，识别完成即释放，无任何落盘路径。
+- 新增 `Tests/LingoPaneTests/VoiceInputTests.swift`（16 项）：WAV 头/重采样、
+  波形电平衰减与裁剪、位图像素校验、端点与 HTTPS/回环校验、请求体
+  （audio 在 text 前、think=false）、转写解码、快捷键偏好。
+- 验证：`swift build` 通过；Xcode 工具链 `swift test` 49 项、0 失败；
+  `swift run LingoPane --preview` 启动存活。真机长按 ⌥V、麦克风授权弹窗、
+  波形观感与 Ollama gemma4:e2b 真实转写仍需手工验收。
+
+## 14. 设置面板扁平化（2026-09-22）
+
+- `SettingCard` 去掉模块底板：移除暖纸色 `surface` 填充、hairline 描边与投影，
+  分组结构改由「小标签（图标 + 标题）+ 行间分隔线」承担，设置页成为一整张连续页面。
+- 对齐与留白：分组标题由 `horizontal 4` 改为 `14`，与行标题同一基线；
+  卡内所有分隔线与状态文案统一 `16 → 14`；分组内间距 `12 → 20`、
+  分区间距 `16 → 26`，行内垂直 `10 → 11`，去掉底板后仍保持清晰层级。
+- 输入框（模型、Base URL、API Key、STT 模型、Vault 路径）底色 `0.04 → 0.05`
+  并补 `0.12` 透明度 hairline 描边，扁平背景上仍能一眼辨认可输入区域。
+- 标题样式微调：`12 → 11.5` 并加 `tracking 0.6`，读作 eyebrow 标签而非第二个标题。
+- 校验：`swift build` 通过；`swift test` 49 项 0 失败；用项目自带
+  `--render-settings <png>` 离屏渲染核对——底板色 `(245,240,231)` 像素数为 0，
+  页面背景 `(239,233,223)` 均匀，分隔线保留。

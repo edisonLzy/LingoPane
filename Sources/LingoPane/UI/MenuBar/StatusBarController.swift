@@ -16,9 +16,7 @@ public final class StatusBarController: NSObject {
     public func configure(state: AppState) {
         self.state = state
         if let button = statusItem.button {
-            button.image = NSImage(systemSymbolName: "character.bubble.fill", accessibilityDescription: "LingoPane")
-            button.imagePosition = .imageOnly
-            button.title = ""
+            restoreIdleIcon()
             button.target = self
             button.action = #selector(handleStatusItemClick)
             button.sendAction(on: [.leftMouseUp, .rightMouseUp])
@@ -28,6 +26,43 @@ public final class StatusBarController: NSObject {
         popover.animates = true
         popover.contentSize = NSSize(width: 360, height: 430)
         popover.contentViewController = NSHostingController(rootView: QuickInputView(state: state))
+    }
+
+    // MARK: - Voice input waveform
+
+    private var voiceVisualizationActive = false
+
+    /// Swaps the menu bar icon for a waveform while the voice hotkey is held.
+    public func beginVoiceVisualization() {
+        voiceVisualizationActive = true
+        statusItem.length = WaveformRenderer.defaultSize.width
+        applyWaveform(WaveformRenderer.image(levels: Array(repeating: 0.05, count: WaveformLevels.barCount)))
+    }
+
+    public func updateVoiceLevels(_ levels: [Float]) {
+        guard voiceVisualizationActive else { return }
+        applyWaveform(WaveformRenderer.image(levels: levels))
+    }
+
+    public func endVoiceVisualization() {
+        guard voiceVisualizationActive else { return }
+        voiceVisualizationActive = false
+        statusItem.length = NSStatusItem.squareLength
+        restoreIdleIcon()
+    }
+
+    private func applyWaveform(_ image: NSImage) {
+        guard let button = statusItem.button else { return }
+        button.image = image
+        button.imagePosition = .imageOnly
+        button.title = ""
+    }
+
+    private func restoreIdleIcon() {
+        guard let button = statusItem.button else { return }
+        button.image = NSImage(systemSymbolName: "character.bubble.fill", accessibilityDescription: "LingoPane")
+        button.imagePosition = .imageOnly
+        button.title = ""
     }
 
     @objc private func handleStatusItemClick() {

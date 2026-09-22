@@ -98,80 +98,227 @@ enum HotKeyPreferences {
     }
 }
 
+/// Preferences for the push-to-talk voice input shortcut (hold to record).
+enum VoiceHotKeyPreferences {
+    private static let keyCodeKey = "voiceHotKey.keyCode"
+    private static let modifiersKey = "voiceHotKey.modifiers"
+    private static let labelKey = "voiceHotKey.label"
+
+    static let defaultShortcut = HotKeyShortcut(
+        keyCode: UInt32(kVK_ANSI_V),
+        modifierFlags: NSEvent.ModifierFlags.option.rawValue,
+        keyLabel: "V"
+    )
+
+    static var current: HotKeyShortcut {
+        guard UserDefaults.standard.object(forKey: keyCodeKey) != nil else { return defaultShortcut }
+        return HotKeyShortcut(
+            keyCode: UInt32(UserDefaults.standard.integer(forKey: keyCodeKey)),
+            modifierFlags: UInt(UserDefaults.standard.integer(forKey: modifiersKey)),
+            keyLabel: UserDefaults.standard.string(forKey: labelKey) ?? "V"
+        )
+    }
+
+    static func save(_ shortcut: HotKeyShortcut) {
+        UserDefaults.standard.set(Int(shortcut.keyCode), forKey: keyCodeKey)
+        UserDefaults.standard.set(Int(shortcut.modifierFlags), forKey: modifiersKey)
+        UserDefaults.standard.set(shortcut.keyLabel, forKey: labelKey)
+    }
+}
+
+/// Shared Carbon event handler for every registered hotkey. It resolves the
+/// `EventHotKeyID` of the event so `HotKeyManager` can route press/release
+/// to the matching registration.
+private func lingoPaneHotKeyEventHandler(
+    _ callRef: EventHandlerCallRef?,
+    _ event: EventRef?,
+    _ userData: UnsafeMutableRawPointer?
+) -> OSStatus {
+    guard let userData, let event else { return noErr }
+    let manager = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
+    var hotKeyID = EventHotKeyID()
+    let status = GetEventParameter(
+        event,
+        EventParamName(kEventParamDirectObject),
+        EventParamType(typeEventHotKeyID),
+        nil,
+        MemoryLayout<EventHotKeyID>.size,
+        nil,
+        &hotKeyID
+    )
+    guard status == noErr else { return noErr }
+    let kind = UInt32(GetEventKind(event))
+    Task { @MainActor in
+        manager.dispatch(hotKeyID: hotKeyID.id, kind: kind)
+    }
+    return noErr
+}
+
 @MainActor
 public final class HotKeyManager {
     public static let shared = HotKeyManager()
 
-    private var eventHandler: EventHandlerRef?
-    private var hotKey: EventHotKeyRef?
-    private var action: (() -> Void)?
+    public enum Kind: UInt32 {
+        case translation = 1
+        case voice = 2
+    }
+
+    private final class Registration {
+        var shortcut: HotKeyShortcut
+        var onPress: (() -> Void)?
+        var onRelease: (() -> Void)?
+        var hotKey: EventHotKeyRef?
+
+        init(shortcut: HotKeyShortcut, onPress: (() -> Void)?, onRelease: (() -> Void)?) {
+            self.shortcut = shortcut
+            self.onPress = onPress
+            self.onRelease = onRelease
+        }
+    }
+
+    private var registrations: [UInt32: Registration] = [:]
+    private var pressHandler: EventHandlerRef?
+    private var releaseHandler: EventHandlerRef?
 
     private init() {}
 
+    /// Registers the selection-translation shortcut (press-only semantics).
     @discardableResult
     public func register(action: @escaping () -> Void) -> Bool {
-        removeRegistration()
-        self.action = action
-        return install(HotKeyPreferences.current) == noErr
+        register(id: .translation, shortcut: HotKeyPreferences.current, onPress: action, onRelease: nil)
+    }
+
+    /// Registers the push-to-talk voice shortcut: press starts recording,
+    /// release stops it and triggers speech-to-text.
+    @discardableResult
+    public func registerVoice(onPress: @escaping () -> Void, onRelease: @escaping () -> Void) -> Bool {
+        register(id: .voice, shortcut: VoiceHotKeyPreferences.current, onPress: onPress, onRelease: onRelease)
     }
 
     @discardableResult
     public func updateShortcut(_ shortcut: HotKeyShortcut) -> Bool {
-        let previous = HotKeyPreferences.current
-        removeRegistration()
-        let status = install(shortcut)
-        if status == noErr {
-            HotKeyPreferences.save(shortcut)
-            return true
-        }
-        removeRegistration()
-        _ = install(previous)
-        return false
+        update(id: .translation, shortcut: shortcut, save: HotKeyPreferences.save)
+    }
+
+    @discardableResult
+    public func updateVoiceShortcut(_ shortcut: HotKeyShortcut) -> Bool {
+        update(id: .voice, shortcut: shortcut, save: VoiceHotKeyPreferences.save)
     }
 
     public func unregister() {
-        removeRegistration()
-        action = nil
+        for id in Array(registrations.keys) { removeRegistration(id: id) }
+        if let pressHandler { RemoveEventHandler(pressHandler) }
+        if let releaseHandler { RemoveEventHandler(releaseHandler) }
+        pressHandler = nil
+        releaseHandler = nil
     }
 
-    private func install(_ shortcut: HotKeyShortcut) -> OSStatus {
-        var eventType = EventTypeSpec(
+    // MARK: - Registration plumbing
+
+    private func register(id: Kind, shortcut: HotKeyShortcut, onPress: (() -> Void)?, onRelease: (() -> Void)?) -> Bool {
+        removeRegistration(id: id.rawValue)
+        guard installHandlers() == noErr else { return false }
+        let registration = Registration(shortcut: shortcut, onPress: onPress, onRelease: onRelease)
+        registrations[id.rawValue] = registration
+        guard install(id: id.rawValue, shortcut: shortcut) == noErr else {
+            registrations[id.rawValue] = nil
+            return false
+        }
+        return true
+    }
+
+    private func update(id: Kind, shortcut: HotKeyShortcut, save: (HotKeyShortcut) -> Void) -> Bool {
+        guard let registration = registrations[id.rawValue] else { return false }
+        let previous = registration.shortcut
+        if let hotKey = registration.hotKey {
+            UnregisterEventHotKey(hotKey)
+            registration.hotKey = nil
+        }
+        if install(id: id.rawValue, shortcut: shortcut) == noErr {
+            registration.shortcut = shortcut
+            save(shortcut)
+            return true
+        }
+        _ = install(id: id.rawValue, shortcut: previous)
+        return false
+    }
+
+    /// Installs one shared handler per Carbon event kind. Both handlers use
+    /// the same function, which resolves the hotkey id and hops to the main
+    /// actor before running user callbacks.
+    private func installHandlers() -> OSStatus {
+        if pressHandler != nil, releaseHandler != nil { return noErr }
+        if let pressHandler { RemoveEventHandler(pressHandler) }
+        if let releaseHandler { RemoveEventHandler(releaseHandler) }
+        pressHandler = nil
+        releaseHandler = nil
+
+        let pointer = Unmanaged.passUnretained(self).toOpaque()
+        var pressed = EventTypeSpec(
             eventClass: OSType(kEventClassKeyboard),
             eventKind: UInt32(kEventHotKeyPressed)
         )
-        let pointer = Unmanaged.passUnretained(self).toOpaque()
-        let handlerStatus = InstallEventHandler(
+        let pressStatus = InstallEventHandler(
             GetEventDispatcherTarget(),
-            { _, _, userData in
-                guard let userData else { return noErr }
-                let manager = Unmanaged<HotKeyManager>.fromOpaque(userData).takeUnretainedValue()
-                Task { @MainActor in manager.action?() }
-                return noErr
-            },
+            lingoPaneHotKeyEventHandler,
             1,
-            &eventType,
+            &pressed,
             pointer,
-            &eventHandler
+            &pressHandler
         )
-        guard handlerStatus == noErr else { return handlerStatus }
+        guard pressStatus == noErr else {
+            pressHandler = nil
+            return pressStatus
+        }
 
-        let identifier = EventHotKeyID(signature: OSType(0x4C50414E), id: 1) // LPAN
+        var released = EventTypeSpec(
+            eventClass: OSType(kEventClassKeyboard),
+            eventKind: UInt32(kEventHotKeyReleased)
+        )
+        let releaseStatus = InstallEventHandler(
+            GetEventDispatcherTarget(),
+            lingoPaneHotKeyEventHandler,
+            1,
+            &released,
+            pointer,
+            &releaseHandler
+        )
+        if releaseStatus != noErr {
+            RemoveEventHandler(pressHandler)
+            pressHandler = nil
+            releaseHandler = nil
+            return releaseStatus
+        }
+        return noErr
+    }
+
+    private func install(id: UInt32, shortcut: HotKeyShortcut) -> OSStatus {
+        let identifier = EventHotKeyID(signature: OSType(0x4C50414E), id: id) // LPAN
+        var hotKeyRef: EventHotKeyRef?
         let status = RegisterEventHotKey(
             shortcut.keyCode,
             shortcut.carbonModifiers,
             identifier,
             GetEventDispatcherTarget(),
             0,
-            &hotKey
+            &hotKeyRef
         )
-        if status != noErr { removeRegistration() }
+        if status == noErr { registrations[id]?.hotKey = hotKeyRef }
         return status
     }
 
-    private func removeRegistration() {
-        if let hotKey { UnregisterEventHotKey(hotKey) }
-        if let eventHandler { RemoveEventHandler(eventHandler) }
-        hotKey = nil
-        eventHandler = nil
+    private func removeRegistration(id: UInt32) {
+        guard let registration = registrations[id] else { return }
+        if let hotKey = registration.hotKey { UnregisterEventHotKey(hotKey) }
+        registrations[id] = nil
+    }
+
+    fileprivate func dispatch(hotKeyID: UInt32, kind: UInt32) {
+        guard let registration = registrations[hotKeyID] else { return }
+        switch kind {
+        case UInt32(kEventHotKeyPressed): registration.onPress?()
+        case UInt32(kEventHotKeyReleased): registration.onRelease?()
+        default: break
+        }
     }
 }

@@ -14,6 +14,7 @@ public struct SettingsView: View {
     @AppStorage("provider") private var provider = "MiniMax"
     @AppStorage("model") private var model = "MiniMax-M2.1"
     @AppStorage("baseURL") private var baseURL = "https://api.minimaxi.com/v1"
+    @AppStorage("sttModel") private var sttModel = SpeechToTextConfiguration.defaultModel
     @AppStorage("saveHistory") private var saveHistory = true
 
     @State private var apiKey = ""
@@ -23,6 +24,8 @@ public struct SettingsView: View {
     @State private var vaultStatus: String?
     @State private var hotKeyShortcut = HotKeyPreferences.current
     @State private var hotKeyStatus: String?
+    @State private var voiceShortcut = VoiceHotKeyPreferences.current
+    @State private var voiceHotKeyStatus: String?
     @State private var showingClearHistoryConfirmation = false
 
     private let ink = Color(red: 0.22, green: 0.21, blue: 0.19)
@@ -34,7 +37,7 @@ public struct SettingsView: View {
 
     public var body: some View {
         ScrollView(.vertical, showsIndicators: false) {
-            VStack(spacing: 16) {
+            VStack(spacing: 26) {
                 generalSection
                 displaySection
                 modelSection
@@ -50,6 +53,7 @@ public struct SettingsView: View {
         .onAppear {
             vaultPath = HistoryStore.configuredPath
             hotKeyShortcut = HotKeyPreferences.current
+            voiceShortcut = VoiceHotKeyPreferences.current
             do { apiKey = try APIKeyStore.read() }
             catch { connectionStatus = error.localizedDescription }
         }
@@ -64,7 +68,7 @@ public struct SettingsView: View {
     // MARK: - General Section
 
     private var generalSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 20) {
             SettingCard("系统与启动", icon: "macwindow") {
                 SettingRow("登录时自动启动", subtitle: "Mac 开机登录时自动在后台启动 LingoPane") {
                     Toggle("", isOn: Binding(get: { loginItem.enabled }, set: { loginItem.setEnabled($0) }))
@@ -75,11 +79,11 @@ public struct SettingsView: View {
                     Text(message)
                         .font(.caption)
                         .foregroundStyle(.secondary)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 14)
                         .padding(.bottom, 8)
                 }
 
-                Divider().opacity(0.2).padding(.horizontal, 16)
+                Divider().opacity(0.2).padding(.horizontal, 14)
 
                 SettingRow("失焦自动收起", subtitle: "点击外部窗口时收起未锁定的临时翻译面板") {
                     Toggle("", isOn: $closeTemporaryOnBlur)
@@ -94,6 +98,10 @@ public struct SettingsView: View {
                         HotKeyRecorderView(
                             shortcut: $hotKeyShortcut,
                             onCommit: { shortcut in
+                                guard shortcut != voiceShortcut else {
+                                    hotKeyStatus = "不能与语音输入快捷键相同"
+                                    return false
+                                }
                                 let accepted = HotKeyManager.shared.updateShortcut(shortcut)
                                 hotKeyStatus = accepted ? "快捷键已生效" : nil
                                 return accepted
@@ -118,9 +126,71 @@ public struct SettingsView: View {
                     Text(hotKeyStatus)
                         .font(.caption)
                         .foregroundStyle(accent)
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 14)
                         .padding(.bottom, 8)
                 }
+            }
+
+            SettingCard("语音输入", icon: "mic") {
+                SettingRow("语音输入快捷键", subtitle: "按住开始录音、菜单栏显示声波，松开后识别为文字（默认 ⌥V）") {
+                    HStack(spacing: 8) {
+                        HotKeyRecorderView(
+                            shortcut: $voiceShortcut,
+                            onCommit: { shortcut in
+                                guard shortcut != hotKeyShortcut else {
+                                    voiceHotKeyStatus = "不能与划词翻译快捷键相同"
+                                    return false
+                                }
+                                let accepted = HotKeyManager.shared.updateVoiceShortcut(shortcut)
+                                voiceHotKeyStatus = accepted ? "快捷键已生效" : nil
+                                return accepted
+                            },
+                            onFailure: { voiceHotKeyStatus = "快捷键已被系统或其他应用占用" }
+                        )
+                        .frame(width: 140, height: 26)
+
+                        Button("默认") {
+                            guard HotKeyManager.shared.updateVoiceShortcut(VoiceHotKeyPreferences.defaultShortcut) else {
+                                voiceHotKeyStatus = "默认快捷键不可用"
+                                return
+                            }
+                            voiceShortcut = VoiceHotKeyPreferences.defaultShortcut
+                            voiceHotKeyStatus = "已恢复为 ⌥V"
+                        }
+                        .controlSize(.small)
+                        .buttonStyle(.bordered)
+                    }
+                }
+                if let voiceHotKeyStatus {
+                    Text(voiceHotKeyStatus)
+                        .font(.caption)
+                        .foregroundStyle(accent)
+                        .padding(.horizontal, 14)
+                }
+
+                Divider().opacity(0.2).padding(.horizontal, 14)
+
+                SettingRow("识别模型 (STT)", subtitle: "需支持音频输入的模型，本地 Ollama 推荐 gemma4:e2b（7.2GB）") {
+                    VStack(alignment: .trailing, spacing: 3) {
+                        TextField("例如 gemma4:e2b", text: $sttModel)
+                            .textFieldStyle(.plain)
+                            .font(.system(size: 12.5))
+                            .padding(.horizontal, 8)
+                            .padding(.vertical, 4)
+                            .background(ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(ink.opacity(0.12), lineWidth: 0.8))
+                            .frame(width: 220)
+                        Text("地址复用上方 Base URL · ollama pull \(sttModel.isEmpty ? SpeechToTextConfiguration.defaultModel : sttModel)")
+                            .font(.caption)
+                            .foregroundStyle(ink.opacity(0.5))
+                    }
+                }
+
+                Divider().opacity(0.2).padding(.horizontal, 14)
+                Text("🎙 录音只保留在内存中，识别完成后即释放，不会写入本地文件；单次录音最长 29 秒。")
+                    .font(.caption)
+                    .foregroundStyle(ink.opacity(0.55))
+                    .padding(.horizontal, 14)
+                    .padding(.vertical, 8)
             }
 
             SettingCard("权限状态", icon: "lock.shield") {
@@ -155,7 +225,7 @@ public struct SettingsView: View {
     // MARK: - Display Section
 
     private var displaySection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 20) {
             SettingCard("分析与排版", icon: "text.alignleft") {
                 SettingRow("默认显示句子主干", subtitle: "英文长难句自动高亮主谓宾核心骨架") {
                     Toggle("", isOn: $showSentenceSkeleton)
@@ -163,7 +233,7 @@ public struct SettingsView: View {
                         .tint(accent)
                 }
 
-                Divider().opacity(0.2).padding(.horizontal, 16)
+                Divider().opacity(0.2).padding(.horizontal, 14)
 
                 SettingRow("默认展开语法详情", subtitle: "在弹窗中默认展开从句及语法成分分析") {
                     Toggle("", isOn: $expandGrammarByDefault)
@@ -171,7 +241,7 @@ public struct SettingsView: View {
                         .tint(accent)
                 }
 
-                Divider().opacity(0.2).padding(.horizontal, 16)
+                Divider().opacity(0.2).padding(.horizontal, 14)
 
                 SettingRow("英文发音口音", subtitle: "朗读词句时使用的发音地区库") {
                     Picker("", selection: $speechLocale) {
@@ -201,7 +271,7 @@ public struct SettingsView: View {
     // MARK: - Model Section
 
     private var modelSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 20) {
             SettingCard("服务商与配置", icon: "cpu") {
                 SettingRow("AI 服务商", subtitle: "选择后端翻译大模型驱动") {
                     Picker("", selection: $provider) {
@@ -219,7 +289,7 @@ public struct SettingsView: View {
                     }
                 }
 
-                Divider().opacity(0.2).padding(.horizontal, 16)
+                Divider().opacity(0.2).padding(.horizontal, 14)
 
                 SettingRow("模型标识 (Model)", subtitle: "用于请求的具体模型名称") {
                     TextField("例如 MiniMax-M2.1", text: $model)
@@ -227,11 +297,11 @@ public struct SettingsView: View {
                         .font(.system(size: 12.5))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+                        .background(ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(ink.opacity(0.12), lineWidth: 0.8))
                         .frame(width: 220)
                 }
 
-                Divider().opacity(0.2).padding(.horizontal, 16)
+                Divider().opacity(0.2).padding(.horizontal, 14)
 
                 SettingRow("接口 Base URL", subtitle: "API 服务的基础访问地址") {
                     TextField("https://...", text: $baseURL)
@@ -239,12 +309,12 @@ public struct SettingsView: View {
                         .font(.system(size: 12.5))
                         .padding(.horizontal, 8)
                         .padding(.vertical, 4)
-                        .background(ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+                        .background(ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(ink.opacity(0.12), lineWidth: 0.8))
                         .frame(width: 220)
                 }
 
                 if provider != ModelProvider.ollama.rawValue {
-                    Divider().opacity(0.2).padding(.horizontal, 16)
+                    Divider().opacity(0.2).padding(.horizontal, 14)
 
                     SettingRow("API Key", subtitle: "加密保存在 macOS 系统的 Keychain 中") {
                         HStack(spacing: 6) {
@@ -253,7 +323,7 @@ public struct SettingsView: View {
                                 .font(.system(size: 12.5))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 4)
-                                .background(ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+                                .background(ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(ink.opacity(0.12), lineWidth: 0.8))
                                 .frame(width: 170)
 
                             Button("保存") {
@@ -267,11 +337,11 @@ public struct SettingsView: View {
                         }
                     }
                 } else {
-                    Divider().opacity(0.2).padding(.horizontal, 16)
+                    Divider().opacity(0.2).padding(.horizontal, 14)
                     Text("💡 本地 Ollama 无需配置 API Key；模型分析使用本地 JSON 结构化输出。")
                         .font(.caption)
                         .foregroundStyle(ink.opacity(0.55))
-                        .padding(.horizontal, 16)
+                        .padding(.horizontal, 14)
                         .padding(.vertical, 8)
                 }
             }
@@ -308,7 +378,7 @@ public struct SettingsView: View {
     // MARK: - Vault Section
 
     private var vaultSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 20) {
             SettingCard("Vault 知识沉淀", icon: "folder") {
                 SettingRow("保存翻译历史到 Vault", subtitle: "将词句卡片自动沉淀为本地 Markdown 知识档案") {
                     Toggle("", isOn: $saveHistory)
@@ -317,7 +387,7 @@ public struct SettingsView: View {
                 }
 
                 if saveHistory {
-                    Divider().opacity(0.2).padding(.horizontal, 16)
+                    Divider().opacity(0.2).padding(.horizontal, 14)
 
                     VStack(alignment: .leading, spacing: 8) {
                         Text("存储目录")
@@ -329,7 +399,7 @@ public struct SettingsView: View {
                                 .font(.system(size: 12, design: .monospaced))
                                 .padding(.horizontal, 8)
                                 .padding(.vertical, 5)
-                                .background(ink.opacity(0.04), in: RoundedRectangle(cornerRadius: 6))
+                                .background(ink.opacity(0.05), in: RoundedRectangle(cornerRadius: 6)).overlay(RoundedRectangle(cornerRadius: 6).strokeBorder(ink.opacity(0.12), lineWidth: 0.8))
 
                             Button("选择…") { chooseVaultFolder() }
                                 .controlSize(.small)
@@ -355,7 +425,7 @@ public struct SettingsView: View {
                             .font(.caption)
                             .foregroundStyle(ink.opacity(0.5))
                     }
-                    .padding(.horizontal, 16)
+                    .padding(.horizontal, 14)
                     .padding(.vertical, 10)
                 }
             }
@@ -378,7 +448,7 @@ public struct SettingsView: View {
                     }
                 }
 
-                Divider().opacity(0.2).padding(.horizontal, 16)
+                Divider().opacity(0.2).padding(.horizontal, 14)
 
                 SettingRow("危险操作", subtitle: "将 Vault 中 LingoPane 创建的内容移至废纸篓") {
                     Button("清空 Vault 历史", role: .destructive) {
@@ -395,7 +465,7 @@ public struct SettingsView: View {
     // MARK: - About Section
 
     private var aboutSection: some View {
-        VStack(spacing: 12) {
+        VStack(spacing: 20) {
             SettingCard("关于 LingoPane", icon: "sparkles") {
                 HStack(spacing: 16) {
                     Image(systemName: "character.bubble.fill")
@@ -411,10 +481,10 @@ public struct SettingsView: View {
                     }
                     Spacer()
                 }
-                .padding(.horizontal, 16)
+                .padding(.horizontal, 14)
                 .padding(.vertical, 14)
 
-                Divider().opacity(0.2).padding(.horizontal, 16)
+                Divider().opacity(0.2).padding(.horizontal, 14)
 
                 SettingRow("软件版本与更新", subtitle: updates.message ?? "检查是否有新版本可用") {
                     HStack(spacing: 8) {
@@ -491,27 +561,28 @@ private struct SettingCard<Content: View>: View {
         self.content = content()
     }
 
+    private static var hairline: Color { Color(red: 0.22, green: 0.21, blue: 0.19) }
+
+    // Flat grouping: no card plate. The eyebrow label plus the hairline dividers
+    // between rows carry the structure, so the list reads as one continuous page
+    // instead of stacked boxes on top of it.
     var body: some View {
         VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: 6) {
                 Image(systemName: icon)
-                    .font(.system(size: 11.5, weight: .semibold))
+                    .font(.system(size: 11, weight: .semibold))
                     .foregroundStyle(Color(red: 0.38, green: 0.46, blue: 0.34))
                 Text(title)
-                    .font(.system(size: 12, weight: .semibold))
-                    .foregroundStyle(Color(red: 0.22, green: 0.21, blue: 0.19).opacity(0.65))
+                    .font(.system(size: 11.5, weight: .semibold))
+                    .tracking(0.6)
+                    .foregroundStyle(Self.hairline.opacity(0.55))
             }
-            .padding(.horizontal, 4)
-            .padding(.bottom, 6)
+            .padding(.horizontal, 14)
+            .padding(.bottom, 2)
 
             VStack(spacing: 0) {
                 content
             }
-            .background(Color.white.opacity(0.55), in: RoundedRectangle(cornerRadius: 10))
-            .overlay(
-                RoundedRectangle(cornerRadius: 10)
-                    .stroke(Color(red: 0.22, green: 0.21, blue: 0.19).opacity(0.08), lineWidth: 0.8)
-            )
         }
     }
 }
@@ -544,6 +615,6 @@ private struct SettingRow<Content: View>: View {
             content
         }
         .padding(.horizontal, 14)
-        .padding(.vertical, 10)
+        .padding(.vertical, 11)
     }
 }

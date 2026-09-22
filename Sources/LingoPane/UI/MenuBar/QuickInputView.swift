@@ -63,12 +63,15 @@ public struct QuickInputView: View {
             if let error = state.lastError {
                 Divider()
                 HStack(spacing: 8) {
-                    Image(systemName: error == .accessibilityPermission ? "hand.raised.fill" : "info.circle.fill")
+                    Image(systemName: failureIcon(for: error))
                     Text(error.errorDescription ?? "请手动输入内容")
                         .font(.system(size: 11))
                     Spacer()
                     if error == .accessibilityPermission {
                         Button("授权") { SelectionProvider.shared.openAccessibilitySettings() }
+                            .controlSize(.mini)
+                    } else if error == .microphonePermission {
+                        Button("授权") { VoiceInputController.shared.openMicrophoneSettings() }
                             .controlSize(.mini)
                     }
                 }
@@ -114,6 +117,9 @@ public struct QuickInputView: View {
                 }
                 .buttonStyle(.plain)
                 Spacer()
+                Text("\(VoiceHotKeyPreferences.current.displayName)  按住说话")
+                    .font(.system(size: 10))
+                    .foregroundStyle(.secondary)
                 Text("\(HotKeyPreferences.current.displayName)  划词翻译")
                     .font(.system(size: 10))
                     .foregroundStyle(.secondary)
@@ -127,6 +133,14 @@ public struct QuickInputView: View {
             inputFocused = true
         }
         .onExitCommand { StatusBarController.shared.closePopover() }
+    }
+
+    private func failureIcon(for error: PanelFailure) -> String {
+        switch error {
+        case .accessibilityPermission: "hand.raised.fill"
+        case .microphonePermission: "mic.slash.fill"
+        default: "info.circle.fill"
+        }
     }
 
     private func submit() {

@@ -43,6 +43,11 @@ final class AppDelegate: NSObject, NSApplicationDelegate {
         HotKeyManager.shared.register {
             AppState.shared.triggerSelectionTranslation()
         }
+        VoiceInputController.shared.attach(state: state)
+        HotKeyManager.shared.registerVoice(
+            onPress: { VoiceInputController.shared.beginRecording() },
+            onRelease: { VoiceInputController.shared.endRecording() }
+        )
 
         let isPreview = CommandLine.arguments.contains { $0.hasPrefix("--preview") }
         if !isPreview && !UserDefaults.standard.bool(forKey: "hasShownInitialLaunchUI") {

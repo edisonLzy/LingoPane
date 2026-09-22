@@ -298,6 +298,7 @@ public struct HistoryItem: Identifiable, Codable, Sendable {
 public enum PanelFailure: LocalizedError, Equatable, Sendable {
     case noSelection
     case accessibilityPermission
+    case microphonePermission
     case networkTimeout
     case authentication
     case overlong(limit: Int)
@@ -308,6 +309,7 @@ public enum PanelFailure: LocalizedError, Equatable, Sendable {
         switch self {
         case .noSelection: "未检测到选区"
         case .accessibilityPermission: "需要辅助功能权限"
+        case .microphonePermission: "需要麦克风权限"
         case .networkTimeout: "网络请求超时"
         case .authentication: "模型鉴权失败"
         case .overlong(let limit): "内容超过 \(limit) 个字符"

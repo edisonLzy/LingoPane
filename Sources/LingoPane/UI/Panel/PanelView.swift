@@ -291,6 +291,7 @@ private struct FailureResultView: View {
     private var explanation: String {
         switch failure {
         case .accessibilityPermission: "授权后，LingoPane 才能读取其他 App 中当前选中的文字。"
+        case .microphonePermission: "授权后，LingoPane 才能录制语音输入。"
         case .networkTimeout: "原文仍然保留，可以稍后重试。"
         case .authentication: "请在设置中检查模型服务和 API Key。"
         case .overlong: "不会自动截断原文，请缩短后重试。"
