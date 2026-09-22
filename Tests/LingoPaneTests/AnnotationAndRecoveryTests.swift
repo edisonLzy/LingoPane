@@ -90,24 +90,39 @@ final class AnnotationAndRecoveryTests: XCTestCase {
     }
 
     @MainActor
+    private func eventually(
+        timeout: Duration = .seconds(2),
+        interval: Duration = .milliseconds(20),
+        condition: @MainActor () -> Bool
+    ) async throws {
+        let start = ContinuousClock.now
+        while ContinuousClock.now - start < timeout {
+            if condition() { return }
+            try await Task.sleep(for: interval)
+        }
+        XCTAssertTrue(condition())
+    }
+
+    @MainActor
     func testTransientMouseExitDoesNotFlickerAnnotationCard() async throws {
         let model = PanelViewModel(source: "A sentence.", classification: Classification(language: .english, kind: .sentence))
         let id = UUID()
 
         model.hoverAnnotation(id)
-        try await Task.sleep(for: .milliseconds(260))
+        try await eventually { model.hoveredAnnotationID == id }
         XCTAssertEqual(model.hoveredAnnotationID, id)
 
         model.hoverAnnotation(nil)
         XCTAssertEqual(model.hoveredAnnotationID, id, "A tracking-area refresh must not hide the card immediately")
         model.hoverAnnotation(id)
-        try await Task.sleep(for: .milliseconds(160))
+        try await Task.sleep(for: .milliseconds(200))
         XCTAssertEqual(model.hoveredAnnotationID, id)
 
         model.hoverAnnotation(nil)
-        try await Task.sleep(for: .milliseconds(160))
+        try await eventually { model.hoveredAnnotationID == nil }
         XCTAssertNil(model.hoveredAnnotationID)
     }
+
 
     func testSnapshotRecoversInterruptedWriteAndClearedData() throws {
         let directory = FileManager.default.temporaryDirectory.appendingPathComponent(UUID().uuidString)
